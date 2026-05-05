@@ -137,17 +137,22 @@ export function useHHResponses(): UseHHResponsesResult {
 
       // Шаг 2: отклики по каждой вакансии
       const all: Candidate[] = [];
+      let accessDenied = 0;
       for (const vac of vacancies) {
         const vacId = vac.id as string;
         try {
           const negData = await fetchWithToken(`${HH_RESPONSES_URL}?resource=negotiations&vacancy_id=${vacId}`);
           const items: Record<string, unknown>[] = negData.items || [];
           all.push(...items.map((item, i) => mapHHNegotiation(item, i)));
-        } catch {
+        } catch (e) {
+          if (e instanceof Error && e.message.includes('403')) accessDenied++;
           // нет доступа к откликам по вакансии — пропускаем
         }
       }
       setCandidates(all);
+      if (all.length === 0 && accessDenied === vacancies.length) {
+        setError('Для загрузки откликов требуется платный доступ к API HH.ru (тариф работодателя)');
+      }
     } catch (e) {
       if (e instanceof Error) {
         if (e.message.includes('403')) {
