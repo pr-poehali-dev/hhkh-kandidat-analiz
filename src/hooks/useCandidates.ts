@@ -154,15 +154,12 @@ export function useCandidates(): UseCandidatesResult {
 
         for (const colId of states) {
           try {
-            const negData = await hhFetch(`${HH_RESPONSES_URL}?resource=negotiations&vacancy_id=${vacId}&col_id=${colId}`);
-            const items: Record<string, unknown>[] = negData.items || [];
-            if (items.length === 0) continue;
-
-            // Сохраняем в БД
+            // Бэкенд сам тянет данные с HH.ru и сохраняет в БД
+            setSyncStatus(s => ({ ...s, progress: `"${vacName}" → ${colId}...` }));
             await fetch(HH_SYNC_URL, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'X-HH-Token': currentToken! },
-              body: JSON.stringify({ vacancy_id: vacId, vacancy_name: vacName, col_id: colId, items }),
+              body: JSON.stringify({ vacancy_id: vacId, vacancy_name: vacName, col_id: colId }),
             });
           } catch {
             // пропускаем недоступные коллекции
