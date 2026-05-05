@@ -16,8 +16,12 @@ def slim_item(item, col_id):
     area = resume.get('area') or {}
     salary = resume.get('salary') or {}
     exp = resume.get('total_experience') or {}
+    # topic_id — реальный ID отклика (переписки), item.id — ID резюме
+    topic_id = str(item.get('id', ''))  # числовой ID отклика из поля id верхнего уровня
+    resume_id = resume.get('id', '') or item.get('id', '')
     return {
-        'id': item.get('id'),
+        'id': topic_id,          # ID отклика для дедупликации
+        'resume_id': resume_id,  # ID резюме
         '_collection_id': col_id,
         'created_at': item.get('created_at', ''),
         'updated_at': item.get('updated_at', ''),
@@ -131,8 +135,8 @@ def handler(event: dict, context) -> dict:
         state_ids = [s['id'] for s in employer_states if s.get('id')]
 
         # Загружаем все коллекции параллельно
-        all_items = []
-        seen_ids = set()
+        # resume_id -> item: берём последний по updated_at (актуальный статус)
+        resume_map = {}
 
         with ThreadPoolExecutor(max_workers=3) as executor:
             futures = {
@@ -143,12 +147,16 @@ def handler(event: dict, context) -> dict:
                 try:
                     items = future.result()
                     for item in items:
-                        item_id = item.get('id')
-                        if item_id and item_id not in seen_ids:
-                            seen_ids.add(item_id)
-                            all_items.append(item)
+                        resume_id = item.get('resume_id') or item.get('id')
+                        if not resume_id:
+                            continue
+                        existing = resume_map.get(resume_id)
+                        if not existing or item.get('updated_at', '') > existing.get('updated_at', ''):
+                            resume_map[resume_id] = item
                 except Exception:
                     pass
+
+        all_items = list(resume_map.values())
 
         return {
             'statusCode': 200,
