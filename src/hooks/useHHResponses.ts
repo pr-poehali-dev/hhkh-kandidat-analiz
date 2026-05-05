@@ -76,8 +76,17 @@ const mapHHNegotiation = (item: Record<string, unknown>, index: number, vacancyN
   };
 };
 
+export interface HHVacancy {
+  id: string;
+  name: string;
+  area: string;
+  publishedAt: string;
+  candidatesCount: number;
+}
+
 export interface UseHHResponsesResult {
   candidates: Candidate[];
+  vacancies: HHVacancy[];
   loading: boolean;
   error: string | null;
   connected: boolean;
@@ -86,6 +95,7 @@ export interface UseHHResponsesResult {
 
 export function useHHResponses(): UseHHResponsesResult {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [vacancies, setVacancies] = useState<HHVacancy[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -127,10 +137,11 @@ export function useHHResponses(): UseHHResponsesResult {
       // Шаг 1: вакансии работодателя через публичный поиск по employer_id
       const vacUrl = `${HH_RESPONSES_URL}?resource=vacancies&employer_id=${employerId}`;
       const vacData = await fetchWithToken(vacUrl);
-      const vacancies: Record<string, unknown>[] = (vacData.items as Record<string, unknown>[]) || [];
+      const rawVacancies: Record<string, unknown>[] = (vacData.items as Record<string, unknown>[]) || [];
 
-      if (vacancies.length === 0) {
+      if (rawVacancies.length === 0) {
         setCandidates([]);
+        setVacancies([]);
         setError('На HH.ru нет активных вакансий. Опубликуйте вакансию — отклики появятся здесь.');
         return;
       }
@@ -138,19 +149,32 @@ export function useHHResponses(): UseHHResponsesResult {
       // Шаг 2: отклики по каждой вакансии
       const all: Candidate[] = [];
       let accessDenied = 0;
-      for (const vac of vacancies) {
+      const vacancyCountMap: Record<string, number> = {};
+
+      for (const vac of rawVacancies) {
         const vacId = vac.id as string;
         const vacName = (vac.name as string) || 'Не указано';
         try {
           const negData = await fetchWithToken(`${HH_RESPONSES_URL}?resource=negotiations&vacancy_id=${vacId}`);
           const items: Record<string, unknown>[] = negData.items || [];
+          vacancyCountMap[vacId] = items.length;
           all.push(...items.map((item, i) => mapHHNegotiation(item, i, vacName)));
         } catch (e) {
           if (e instanceof Error && e.message.includes('403')) accessDenied++;
+          vacancyCountMap[vacId] = 0;
         }
       }
+
       setCandidates(all);
-      if (all.length === 0 && accessDenied === vacancies.length) {
+      setVacancies(rawVacancies.map((v) => ({
+        id: v.id as string,
+        name: (v.name as string) || '',
+        area: ((v.area as Record<string, unknown>)?.name as string) || '',
+        publishedAt: ((v.published_at as string) || '').slice(0, 10),
+        candidatesCount: vacancyCountMap[v.id as string] || 0,
+      })));
+
+      if (all.length === 0 && accessDenied === rawVacancies.length) {
         setError('Для загрузки откликов требуется платный доступ к API HH.ru (тариф работодателя)');
       }
     } catch (e) {
@@ -172,5 +196,5 @@ export function useHHResponses(): UseHHResponsesResult {
     if (connected) fetchResponses();
   }, [connected, fetchResponses]);
 
-  return { candidates, loading, error, connected, refresh: fetchResponses };
+  return { candidates, vacancies, loading, error, connected, refresh: fetchResponses };
 }

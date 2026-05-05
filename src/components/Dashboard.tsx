@@ -1,5 +1,5 @@
 import { useHHResponses } from '@/hooks/useHHResponses';
-import { vacancies, historyLogs, statusLabels, CandidateStatus } from '@/data/mockData';
+import { historyLogs, statusLabels, CandidateStatus } from '@/data/mockData';
 import Icon from '@/components/ui/icon';
 import StatusBadge from '@/components/StatusBadge';
 
@@ -13,7 +13,7 @@ const funnelStages: { status: CandidateStatus; color: string }[] = [
 ];
 
 export default function Dashboard() {
-  const { candidates, connected, loading } = useHHResponses();
+  const { candidates, vacancies, connected, loading } = useHHResponses();
 
   const statusCounts = candidates.reduce((acc, c) => {
     acc[c.status] = (acc[c.status] || 0) + 1;
@@ -100,26 +100,28 @@ export default function Dashboard() {
           <div className="panel-header">
             <span className="text-xs font-semibold text-foreground uppercase tracking-wider">Активные вакансии</span>
           </div>
-          {vacancies.length === 0 ? (
+          {loading ? (
+            <div className="py-8 text-center text-xs text-muted-foreground">Загружается...</div>
+          ) : vacancies.length === 0 ? (
             <div className="py-8 text-center text-xs text-muted-foreground">Вакансии появятся после подключения HH.ru</div>
           ) : (
             <table className="w-full data-table">
               <thead>
                 <tr>
                   <th>Позиция</th>
-                  <th>Отдел</th>
-                  <th>Открыта</th>
+                  <th>Город</th>
+                  <th>Опубликована</th>
                   <th className="text-right">Откликов</th>
                 </tr>
               </thead>
               <tbody>
                 {vacancies.map((v) => (
-                  <tr key={v.id} className="cursor-pointer">
-                    <td className="font-medium text-foreground">{v.title}</td>
-                    <td className="text-muted-foreground">{v.department}</td>
-                    <td className="text-muted-foreground font-mono-data">{v.openSince}</td>
+                  <tr key={v.id}>
+                    <td className="font-medium text-foreground">{v.name}</td>
+                    <td className="text-muted-foreground">{v.area}</td>
+                    <td className="text-muted-foreground font-mono-data">{v.publishedAt}</td>
                     <td className="text-right">
-                      <span className="font-mono-data text-primary font-semibold">{v.candidates}</span>
+                      <span className="font-mono-data text-primary font-semibold">{v.candidatesCount}</span>
                     </td>
                   </tr>
                 ))}
