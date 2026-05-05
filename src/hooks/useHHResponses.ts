@@ -17,16 +17,15 @@ const mapHHStatus = (state: string): CandidateStatus => {
 
 const mapHHNegotiation = (item: Record<string, unknown>, index: number): Candidate => {
   const resume = (item.resume as Record<string, unknown>) || {};
-  const applicant = (resume.owner as Record<string, unknown>) || {};
   const area = (resume.area as Record<string, unknown>) || {};
   const salary = (resume.salary as Record<string, unknown>) || {};
   const experience = (resume.total_experience as Record<string, unknown>) || {};
   const contacts = (resume.contact as unknown[]) || [];
 
-  const fullName = `${(applicant.last_name as string) || ''} ${(applicant.first_name as string) || ''}`.trim()
-    || (resume.first_name as string) || 'Кандидат';
+  // Имя прямо в resume
+  const fullName = `${(resume.last_name as string) || ''} ${(resume.first_name as string) || ''}`.trim() || 'Кандидат';
   const phone = (contacts.find((c) => (c as Record<string, unknown>).type === 'cell') as Record<string, unknown> | undefined)?.value as string || '';
-  const email = (applicant.email as string) || '';
+  const email = '';
   const salaryValue = salary.amount ? `${Number(salary.amount).toLocaleString('ru')}` : '—';
   const expMonths = (experience.months as number) || 0;
   const expYears = Math.round(expMonths / 12);
