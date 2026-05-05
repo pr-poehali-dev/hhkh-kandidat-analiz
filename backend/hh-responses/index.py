@@ -60,11 +60,40 @@ def handler(event: dict, context) -> dict:
                 'headers': {**CORS, 'Content-Type': 'application/json'},
                 'body': json.dumps({'error': 'vacancy_id is required for negotiations'}),
             }
-        # Правильный эндпоинт для работодателя
-        url = f'https://api.hh.ru/negotiations?vacancy_id={vacancy_id}&per_page=50'
-    elif resource == 'negotiations_all':
-        # Список всех откликов без фильтра по вакансии
-        url = 'https://api.hh.ru/negotiations?per_page=50'
+        # Сначала получаем список коллекций, потом забираем отклики из каждой
+        collections_url = f'https://api.hh.ru/negotiations?vacancy_id={vacancy_id}&per_page=1'
+        req_col = urllib.request.Request(collections_url, headers=hh_headers)
+        try:
+            with urllib.request.urlopen(req_col) as r:
+                col_data = json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode('utf-8', errors='ignore')
+            return {
+                'statusCode': e.code,
+                'headers': {**CORS, 'Content-Type': 'application/json'},
+                'body': json.dumps({'error': f'HH.ru error {e.code}', 'details': error_body}),
+            }
+
+        collections = col_data.get('collections', [])
+        all_items = []
+        for col in collections:
+            col_url = col.get('url', '')
+            if not col_url or col.get('hidden'):
+                continue
+            col_url += '&per_page=50'
+            req_items = urllib.request.Request(col_url, headers=hh_headers)
+            try:
+                with urllib.request.urlopen(req_items) as r:
+                    items_data = json.loads(r.read())
+                all_items.extend(items_data.get('items', []))
+            except Exception:
+                continue
+
+        return {
+            'statusCode': 200,
+            'headers': {**CORS, 'Content-Type': 'application/json'},
+            'body': json.dumps({'items': all_items, 'found': len(all_items)}),
+        }
     elif resource == 'me':
         url = 'https://api.hh.ru/me'
     elif resource == 'employer':
