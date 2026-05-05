@@ -38,19 +38,24 @@ def slim_item(item, col_id):
 def fetch_collection(col_id, vacancy_id, hh_headers):
     """Загружает все страницы одной коллекции"""
     items = []
-    page = 0
-    while True:
-        url = f'https://api.hh.ru/negotiations/{col_id}?vacancy_id={vacancy_id}&per_page=50&page={page}'
+    # Первая страница — без параметра page (HH.ru не принимает page=0)
+    url = f'https://api.hh.ru/negotiations/{col_id}?vacancy_id={vacancy_id}&per_page=50'
+    try:
+        data = fetch_json(url, hh_headers)
+    except Exception:
+        return items
+    for item in data.get('items', []):
+        items.append(slim_item(item, col_id))
+    pages = data.get('pages', 1)
+    # Остальные страницы начиная со второй
+    for page in range(1, pages):
+        url_p = f'https://api.hh.ru/negotiations/{col_id}?vacancy_id={vacancy_id}&per_page=50&page={page}'
         try:
-            data = fetch_json(url, hh_headers)
+            data_p = fetch_json(url_p, hh_headers)
         except Exception:
             break
-        for item in data.get('items', []):
+        for item in data_p.get('items', []):
             items.append(slim_item(item, col_id))
-        pages = data.get('pages', 1)
-        page += 1
-        if page >= pages:
-            break
     return items
 
 
@@ -151,6 +156,11 @@ def handler(event: dict, context) -> dict:
             'body': json.dumps({'items': all_items, 'found': len(all_items)}),
         }
 
+    elif resource == 'debug_col':
+        vacancy_id = params.get('vacancy_id', '')
+        col_id = params.get('col_id', 'assessment')
+        page = params.get('page', '0')
+        url = f'https://api.hh.ru/negotiations/{col_id}?vacancy_id={vacancy_id}&per_page=50&page={page}'
     elif resource == 'me':
         url = 'https://api.hh.ru/me'
     else:
