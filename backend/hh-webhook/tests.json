@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "name": "GET verification",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
