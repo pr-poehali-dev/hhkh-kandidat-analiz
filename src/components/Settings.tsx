@@ -40,15 +40,13 @@ function HHIntegration() {
     setStatus('checking');
     setErrorMsg('');
     try {
-      const res = await fetch(`${HH_RESPONSES_URL}?resource=me`, {
+      const res = await fetch(`${HH_RESPONSES_URL}?resource=negotiations`, {
         headers: { 'X-HH-Token': t },
       });
       if (!res.ok) throw new Error(`Неверный токен (${res.status})`);
-      const data = await res.json();
-      const login = data.email || data.first_name || 'Аккаунт подключён';
       localStorage.setItem('hh_access_token', t);
-      localStorage.setItem('hh_login', login);
-      setHhLogin(login);
+      localStorage.setItem('hh_login', 'HH.ru работодатель');
+      setHhLogin('HH.ru работодатель');
       setStatus('connected');
       setShowInput(false);
       setInputValue('');

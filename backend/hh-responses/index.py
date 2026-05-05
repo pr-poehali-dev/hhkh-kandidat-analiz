@@ -21,7 +21,14 @@ def handler(event: dict, context) -> dict:
     CORS = {'Access-Control-Allow-Origin': '*'}
 
     headers = event.get('headers', {})
-    token = headers.get('X-HH-Token') or (event.get('queryStringParameters') or {}).get('token')
+    # Ищем токен без учёта регистра заголовка
+    token = None
+    for k, v in headers.items():
+        if k.lower() == 'x-hh-token':
+            token = v
+            break
+    if not token:
+        token = (event.get('queryStringParameters') or {}).get('token')
 
     if not token:
         return {
