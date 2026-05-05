@@ -1,7 +1,6 @@
 import json
 import urllib.request
 import urllib.error
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 def fetch_json(url, hh_headers):
@@ -134,32 +133,18 @@ def handler(event: dict, context) -> dict:
         employer_states = col_data.get('employer_states', [])
         state_ids = [s['id'] for s in employer_states if s.get('id')]
 
-        # Загружаем все коллекции параллельно
-        # resume_id -> item: берём последний по updated_at (актуальный статус)
-        resume_map = {}
+        # Загружаем коллекции последовательно — стабильно и без потерь
+        # Дедупликация по ID отклика (один человек = один отклик на вакансию)
+        seen_ids = set()
+        all_items = []
 
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            futures = {
-                executor.submit(fetch_collection, col_id, vacancy_id, hh_headers): col_id
-                for col_id in state_ids
-            }
-            for future in as_completed(futures):
-                try:
-                    items = future.result()
-                    for item in items:
-                        # Ключ дедупликации: ID отклика (числовой, уникален на вакансию)
-                        # Один человек в одной вакансии = один отклик = один ID
-                        item_id = item.get('id')
-                        if not item_id:
-                            continue
-                        existing = resume_map.get(item_id)
-                        # Берём запись с более поздним updated_at (актуальный статус)
-                        if not existing or item.get('updated_at', '') > existing.get('updated_at', ''):
-                            resume_map[item_id] = item
-                except Exception:
-                    pass
-
-        all_items = list(resume_map.values())
+        for col_id in state_ids:
+            items = fetch_collection(col_id, vacancy_id, hh_headers)
+            for item in items:
+                item_id = item.get('id')
+                if item_id and item_id not in seen_ids:
+                    seen_ids.add(item_id)
+                    all_items.append(item)
 
         return {
             'statusCode': 200,
