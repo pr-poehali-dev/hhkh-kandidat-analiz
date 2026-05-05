@@ -1,4 +1,4 @@
-export type CandidateStatus = 'new' | 'review' | 'test' | 'interview' | 'offer' | 'reject';
+export type CandidateStatus = 'new' | 'review' | 'test' | 'check' | 'interview' | 'offer' | 'reject';
 
 export interface Candidate {
   id: string;
@@ -48,6 +48,7 @@ export const statusLabels: Record<CandidateStatus, string> = {
   new: 'Новый',
   review: 'Первичный контакт',
   test: 'Тестирование',
+  check: 'Проверка результатов',
   interview: 'Собеседование',
   offer: 'Принят на работу',
   reject: 'Отказ',

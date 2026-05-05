@@ -108,6 +108,9 @@
   .tag-test {
     @apply bg-purple-500/15 text-purple-400 border border-purple-500/25 text-xs px-1.5 py-0.5 rounded;
   }
+  .tag-check {
+    @apply bg-orange-500/15 text-orange-400 border border-orange-500/25 text-xs px-1.5 py-0.5 rounded;
+  }
   .tag-interview {
     @apply bg-cyan-500/15 text-cyan-400 border border-cyan-500/25 text-xs px-1.5 py-0.5 rounded;
   }

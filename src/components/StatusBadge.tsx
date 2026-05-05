@@ -9,6 +9,7 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
     new: 'tag-new',
     review: 'tag-review',
     test: 'tag-test',
+    check: 'tag-check',
     interview: 'tag-interview',
     offer: 'tag-offer',
     reject: 'tag-reject',

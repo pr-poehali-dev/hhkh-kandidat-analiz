@@ -7,6 +7,7 @@ const funnelStages: { status: CandidateStatus; color: string }[] = [
   { status: 'new', color: 'bg-blue-500' },
   { status: 'review', color: 'bg-yellow-500' },
   { status: 'test', color: 'bg-purple-500' },
+  { status: 'check', color: 'bg-orange-500' },
   { status: 'interview', color: 'bg-cyan-500' },
   { status: 'offer', color: 'bg-green-500' },
   { status: 'reject', color: 'bg-red-500' },
@@ -21,12 +22,14 @@ export default function Dashboard() {
   }, {} as Record<string, number>);
 
   const recent = [...candidates].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 6);
+  const needsCheck = candidates.filter(c => c.status === 'check');
 
   const stats = [
     { label: 'Всего кандидатов', value: candidates.length, icon: 'Users', color: '' },
     { label: 'Новых откликов', value: statusCounts['new'] || 0, icon: 'UserPlus', color: 'text-blue-400' },
     { label: 'Первичный контакт', value: statusCounts['review'] || 0, icon: 'MessageCircle', color: 'text-yellow-400' },
     { label: 'На тестировании', value: statusCounts['test'] || 0, icon: 'ClipboardCheck', color: 'text-purple-400' },
+    { label: 'Проверка результатов', value: statusCounts['check'] || 0, icon: 'AlertCircle', color: 'text-orange-400' },
     { label: 'Собеседований', value: statusCounts['interview'] || 0, icon: 'CalendarDays', color: 'text-cyan-400' },
     { label: 'Принято на работу', value: statusCounts['offer'] || 0, icon: 'CheckCircle2', color: 'text-green-400' },
     { label: 'Отказов', value: statusCounts['reject'] || 0, icon: 'UserX', color: 'text-red-400' },
@@ -37,7 +40,7 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col gap-3 animate-fade-in">
       {/* Stats Row */}
-      <div className="grid grid-cols-7 gap-2">
+      <div className="grid grid-cols-8 gap-2">
         {stats.map((s) => (
           <div key={s.label} className="panel p-3 flex flex-col gap-1">
             <div className="flex items-center justify-between">
@@ -141,6 +144,39 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {/* Needs Check */}
+      {needsCheck.length > 0 && (
+        <div className="panel border-orange-500/40">
+          <div className="panel-header bg-orange-500/5">
+            <div className="flex items-center gap-2">
+              <Icon name="AlertCircle" size={13} className="text-orange-400" />
+              <span className="text-xs font-semibold text-orange-400 uppercase tracking-wider">Необходима проверка результатов</span>
+            </div>
+            <span className="text-xs font-mono-data text-orange-400">{needsCheck.length} кандидатов</span>
+          </div>
+          <table className="w-full data-table">
+            <thead>
+              <tr>
+                <th>Имя</th>
+                <th>Позиция</th>
+                <th>Город</th>
+                <th>Обновлён</th>
+              </tr>
+            </thead>
+            <tbody>
+              {needsCheck.map((c) => (
+                <tr key={c.id}>
+                  <td className="font-medium text-foreground">{c.name}</td>
+                  <td className="text-muted-foreground">{c.position}</td>
+                  <td className="text-muted-foreground">{c.city}</td>
+                  <td className="text-muted-foreground font-mono-data">{c.updatedAt}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Recent Candidates */}
       <div className="panel">
