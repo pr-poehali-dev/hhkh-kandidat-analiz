@@ -83,35 +83,24 @@ def handler(event: dict, context) -> dict:
             col_id = col.get('id', '')
             if not col_url:
                 continue
-            # Пропускаем только скрытые коллекции без откликов
-            # hidden=True означает пустую/неактивную коллекцию
             if col.get('hidden') and col.get('count', 0) == 0:
                 continue
 
-            # Загружаем все страницы коллекции
-            page = 0
-            while True:
-                paged_url = f'{col_url}&per_page=50&page={page}'
-                req_items = urllib.request.Request(paged_url, headers=hh_headers)
-                try:
-                    with urllib.request.urlopen(req_items) as r:
-                        items_data = json.loads(r.read())
-                except Exception:
-                    break
+            # Берём первые 100 из каждой коллекции (достаточно для большинства случаев)
+            paged_url = f'{col_url}&per_page=100&page=0'
+            req_items = urllib.request.Request(paged_url, headers=hh_headers)
+            try:
+                with urllib.request.urlopen(req_items) as r:
+                    items_data = json.loads(r.read())
+            except Exception:
+                continue
 
-                page_items = items_data.get('items', [])
-                for item in page_items:
-                    item_id = item.get('id')
-                    if item_id not in seen_ids:
-                        seen_ids.add(item_id)
-                        # Добавляем collection_id чтобы маппить статус точно
-                        item['_collection_id'] = col_id
-                        all_items.append(item)
-
-                pages = items_data.get('pages', 1)
-                page += 1
-                if page >= pages:
-                    break
+            for item in items_data.get('items', []):
+                item_id = item.get('id')
+                if item_id not in seen_ids:
+                    seen_ids.add(item_id)
+                    item['_collection_id'] = col_id
+                    all_items.append(item)
 
         return {
             'statusCode': 200,
