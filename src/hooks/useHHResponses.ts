@@ -37,7 +37,7 @@ const mapHHStatus = (state: string): CandidateStatus => {
   }
 };
 
-const mapHHNegotiation = (item: Record<string, unknown>, index: number): Candidate => {
+const mapHHNegotiation = (item: Record<string, unknown>, index: number, vacancyName?: string): Candidate => {
   const resume = (item.resume as Record<string, unknown>) || {};
   const area = (resume.area as Record<string, unknown>) || {};
   const salary = (resume.salary as Record<string, unknown>) || {};
@@ -53,8 +53,8 @@ const mapHHNegotiation = (item: Record<string, unknown>, index: number): Candida
   const expYears = Math.round(expMonths / 12);
 
   const vacancyObj = (item.vacancy as Record<string, unknown>) || {};
-  // Позиция — всегда название вакансии на которую откликнулся, резюме-должность в resumeTitle
-  const position = (vacancyObj.name as string) || 'Не указано';
+  // Позиция — название вакансии (передаётся снаружи или из объекта отклика)
+  const position = vacancyName || (vacancyObj.name as string) || 'Не указано';
   const resumeTitle = (resume.title as string) || '';
   const state = ((item.state as Record<string, unknown>)?.id as string) || 'response';
 
@@ -140,13 +140,13 @@ export function useHHResponses(): UseHHResponsesResult {
       let accessDenied = 0;
       for (const vac of vacancies) {
         const vacId = vac.id as string;
+        const vacName = (vac.name as string) || 'Не указано';
         try {
           const negData = await fetchWithToken(`${HH_RESPONSES_URL}?resource=negotiations&vacancy_id=${vacId}`);
           const items: Record<string, unknown>[] = negData.items || [];
-          all.push(...items.map((item, i) => mapHHNegotiation(item, i)));
+          all.push(...items.map((item, i) => mapHHNegotiation(item, i, vacName)));
         } catch (e) {
           if (e instanceof Error && e.message.includes('403')) accessDenied++;
-          // нет доступа к откликам по вакансии — пропускаем
         }
       }
       setCandidates(all);
