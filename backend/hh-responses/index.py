@@ -4,6 +4,12 @@ import urllib.request
 import urllib.error
 
 
+def fetch_json(url, hh_headers):
+    req = urllib.request.Request(url, headers=hh_headers)
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read())
+
+
 def handler(event: dict, context) -> dict:
     """Загрузка откликов и вакансий работодателя с HH.ru"""
 
@@ -22,7 +28,6 @@ def handler(event: dict, context) -> dict:
     CORS = {'Access-Control-Allow-Origin': '*'}
 
     headers = event.get('headers', {})
-    # Ищем токен без учёта регистра заголовка
     token = None
     for k, v in headers.items():
         if k.lower() == 'x-hh-token':
@@ -48,24 +53,23 @@ def handler(event: dict, context) -> dict:
 
     if resource == 'vacancies':
         employer_id = params.get('employer_id', '')
-        if employer_id:
-            url = f'https://api.hh.ru/vacancies?employer_id={employer_id}&per_page=50'
-        else:
-            url = 'https://api.hh.ru/vacancies/mine?per_page=50'
+        url = f'https://api.hh.ru/vacancies?employer_id={employer_id}&per_page=50' if employer_id else 'https://api.hh.ru/vacancies/mine?per_page=50'
+
     elif resource == 'negotiations':
         vacancy_id = params.get('vacancy_id', '')
         if not vacancy_id:
             return {
                 'statusCode': 400,
                 'headers': {**CORS, 'Content-Type': 'application/json'},
-                'body': json.dumps({'error': 'vacancy_id is required for negotiations'}),
+                'body': json.dumps({'error': 'vacancy_id is required'}),
             }
-        # Сначала получаем список коллекций, потом забираем отклики из каждой
-        collections_url = f'https://api.hh.ru/negotiations?vacancy_id={vacancy_id}&per_page=100'
-        req_col = urllib.request.Request(collections_url, headers=hh_headers)
+
+        # Получаем список employer_states для этой вакансии
         try:
-            with urllib.request.urlopen(req_col) as r:
-                col_data = json.loads(r.read())
+            col_data = fetch_json(
+                f'https://api.hh.ru/negotiations?vacancy_id={vacancy_id}&per_page=1',
+                hh_headers
+            )
         except urllib.error.HTTPError as e:
             error_body = e.read().decode('utf-8', errors='ignore')
             return {
@@ -75,55 +79,39 @@ def handler(event: dict, context) -> dict:
             }
 
         employer_states = col_data.get('employer_states', [])
-        collections = col_data.get('collections', [])
-
-        # Строим map: col_id -> url из collections объектов
-        col_url_map = {c.get('id', ''): c.get('url', '') for c in collections}
-
-        # Список всех статусов
-        all_state_ids = [s.get('id', '') for s in employer_states]
-        if not all_state_ids:
-            all_state_ids = [c.get('id', '') for c in collections]
+        state_ids = [s['id'] for s in employer_states if s.get('id')]
 
         all_items = []
         seen_ids = set()
 
-        for col_id in all_state_ids:
-            if not col_id:
-                continue
-            # Используем URL из collections если есть (уже содержит vacancy_id)
-            # иначе строим сами
-            col_url = col_url_map.get(col_id, '')
-            if col_url:
-                paged_url = col_url  # URL уже содержит vacancy_id
-            else:
-                paged_url = f'https://api.hh.ru/negotiations/{col_id}?vacancy_id={vacancy_id}'
-            req_items = urllib.request.Request(paged_url, headers=hh_headers)
-            try:
-                with urllib.request.urlopen(req_items) as r:
-                    items_data = json.loads(r.read())
-                for item in items_data.get('items', []):
+        for col_id in state_ids:
+            page = 0
+            while True:
+                url_page = f'https://api.hh.ru/negotiations/{col_id}?vacancy_id={vacancy_id}&per_page=50&page={page}'
+                try:
+                    data = fetch_json(url_page, hh_headers)
+                except Exception:
+                    break
+
+                for item in data.get('items', []):
                     item_id = item.get('id')
-                    if item_id not in seen_ids:
+                    if item_id and item_id not in seen_ids:
                         seen_ids.add(item_id)
                         item['_collection_id'] = col_id
                         all_items.append(item)
-            except Exception:
-                continue
+
+                pages = data.get('pages', 1)
+                page += 1
+                if page >= pages:
+                    break
 
         return {
             'statusCode': 200,
             'headers': {**CORS, 'Content-Type': 'application/json'},
             'body': json.dumps({'items': all_items, 'found': len(all_items)}),
         }
-    elif resource == 'debug_negotiations':
-        vacancy_id = params.get('vacancy_id', '')
-        col_id = params.get('col_id', 'assessment')
-        url = f'https://api.hh.ru/negotiations/{col_id}?vacancy_id={vacancy_id}&per_page=5'
+
     elif resource == 'me':
-        url = 'https://api.hh.ru/me'
-    elif resource == 'employer':
-        # Данные работодателя
         url = 'https://api.hh.ru/me'
     else:
         return {
@@ -132,10 +120,8 @@ def handler(event: dict, context) -> dict:
             'body': json.dumps({'error': f'Unknown resource: {resource}'}),
         }
 
-    req = urllib.request.Request(url, headers=hh_headers)
     try:
-        with urllib.request.urlopen(req) as resp:
-            data = json.loads(resp.read())
+        data = fetch_json(url, hh_headers)
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8', errors='ignore')
         return {
