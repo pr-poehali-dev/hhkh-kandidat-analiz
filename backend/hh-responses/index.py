@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def fetch_json(url, hh_headers):
     req = urllib.request.Request(url, headers=hh_headers)
-    with urllib.request.urlopen(req, timeout=8) as r:
+    with urllib.request.urlopen(req, timeout=20) as r:
         return json.loads(r.read())
 
 
