@@ -46,6 +46,8 @@ function mapDbRow(row: Record<string, unknown>): Candidate & { applicationId: nu
     tags: row.resume_title ? [row.resume_title as string] : [],
     applicationId: row.application_id as number,
     prevApplicationsCount: (row.prev_applications_count as number) || 0,
+    hhResumeId: (row.hh_resume_id as string) || '',
+    hhNegotiationId: (row.hh_negotiation_id as string) || '',
   };
 }
 

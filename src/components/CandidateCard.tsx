@@ -4,8 +4,12 @@ import Icon from '@/components/ui/icon';
 
 export default function CandidateCard({ candidateId, onBack }: { candidateId: string; onBack: () => void }) {
   const { candidates } = useCandidates();
-  const c = candidates.find((x) => x.id === candidateId);
+  const c = candidates.find((x) => x.id === candidateId) as typeof candidates[0] & { hhResumeId?: string; hhNegotiationId?: string };
   if (!c) return null;
+
+  const resumeUrl = c.hhResumeId
+    ? `https://hh.ru/resume/${c.hhResumeId}`
+    : null;
 
   return (
     <div className="flex flex-col gap-3 animate-fade-in">
@@ -99,28 +103,32 @@ export default function CandidateCard({ candidateId, onBack }: { candidateId: st
         <div className="col-span-6 panel">
           <div className="panel-header">
             <span className="text-xs font-semibold text-foreground uppercase tracking-wider">Резюме</span>
-            <a
-              href={`https://hh.ru/resume/${c.id.replace('hh-', '')}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-primary hover:underline flex items-center gap-1"
-            >
-              <Icon name="ExternalLink" size={11} />
-              Открыть на HH.ru
-            </a>
+            {resumeUrl && (
+              <a
+                href={resumeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-primary hover:underline flex items-center gap-1"
+              >
+                <Icon name="ExternalLink" size={11} />
+                Открыть на HH.ru
+              </a>
+            )}
           </div>
           <div className="p-4 flex flex-col items-center justify-center gap-3 text-muted-foreground min-h-48">
             <Icon name="FileText" size={28} />
             <div className="text-sm text-center">
               Полное резюме доступно на HH.ru<br />
-              <a
-                href={`https://hh.ru/resume/${c.id.replace('hh-', '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary hover:underline text-xs mt-1 inline-block"
-              >
-                Открыть резюме →
-              </a>
+              {resumeUrl && (
+                <a
+                  href={resumeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline text-xs mt-1 inline-block"
+                >
+                  Открыть резюме →
+                </a>
+              )}
             </div>
           </div>
         </div>
