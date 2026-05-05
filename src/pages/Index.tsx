@@ -6,7 +6,7 @@ import CandidateCard from '@/components/CandidateCard';
 import CalendarView from '@/components/CalendarView';
 import HistoryView from '@/components/HistoryView';
 import Settings from '@/components/Settings';
-import { candidates } from '@/data/mockData';
+import { useHHResponses } from '@/hooks/useHHResponses';
 
 type Section = 'dashboard' | 'responses' | 'card' | 'calendar' | 'history' | 'settings';
 
@@ -32,12 +32,11 @@ export default function Index() {
     setSelectedCandidateId(null);
   };
 
+  const { candidates } = useHHResponses();
   const newCount = candidates.filter((c) => c.status === 'new').length;
-  const interviewCount = 5;
 
   const getBadge = (id: string) => {
-    if (id === 'responses') return newCount;
-    if (id === 'calendar') return interviewCount;
+    if (id === 'responses') return newCount || null;
     return null;
   };
 
