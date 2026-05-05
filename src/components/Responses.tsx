@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { candidates as mockCandidates, CandidateStatus, statusLabels } from '@/data/mockData';
-import { useHHResponses } from '@/hooks/useHHResponses';
+import { CandidateStatus, statusLabels } from '@/data/mockData';
+import { useCandidates } from '@/hooks/useCandidates';
 import StatusBadge from '@/components/StatusBadge';
 import Icon from '@/components/ui/icon';
 
@@ -13,10 +13,8 @@ export default function Responses({ onSelectCandidate }: { onSelectCandidate: (i
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
 
-  const { candidates: hhCandidates, loading, error, connected, refresh } = useHHResponses();
-
-  // Если HH.ru подключён — показываем реальные данные, иначе моковые
-  const allCandidates = connected ? hhCandidates : mockCandidates;
+  const { candidates: allCandidatesRaw, loading, error, connected, syncStatus, syncFromHH, refresh } = useCandidates();
+  const allCandidates = allCandidatesRaw;
 
   const filtered = allCandidates.filter((c) => {
     if (filterStatus !== 'all' && c.status !== filterStatus) return false;
@@ -32,25 +30,34 @@ export default function Responses({ onSelectCandidate }: { onSelectCandidate: (i
   return (
     <div className="flex flex-col gap-3 animate-fade-in">
 
-      {/* HH Banner */}
-      {connected && (
-        <div className={`panel p-2.5 flex items-center gap-2 border-green-500/20 bg-green-500/5`}>
-          <Icon name="CheckCircle2" size={13} className="text-green-500 shrink-0" />
-          <span className="text-xs text-foreground">
-            Данные из <strong>HH.ru</strong> — {loading ? 'загружается...' : `${hhCandidates.length} откликов`}
-          </span>
-          <button onClick={refresh} disabled={loading} className="ml-auto text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 disabled:opacity-50">
+      {/* Баннер статуса */}
+      <div className="panel p-2.5 flex items-center gap-2">
+        <Icon name="Database" size={13} className="text-primary shrink-0" />
+        <span className="text-xs text-foreground">
+          {syncStatus.syncing
+            ? <span className="text-muted-foreground">{syncStatus.progress}</span>
+            : <span>База данных — <strong>{allCandidates.length}</strong> откликов{syncStatus.lastSync ? ` · обновлено ${syncStatus.lastSync}` : ''}</span>
+          }
+        </span>
+        <div className="ml-auto flex items-center gap-2">
+          <button onClick={refresh} disabled={loading} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 disabled:opacity-50">
             <Icon name="RefreshCw" size={11} className={loading ? 'animate-spin' : ''} />
             Обновить
           </button>
+          {connected && (
+            <button onClick={syncFromHH} disabled={syncStatus.syncing} className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded flex items-center gap-1 hover:opacity-90 disabled:opacity-50">
+              <Icon name="Download" size={11} className={syncStatus.syncing ? 'animate-spin' : ''} />
+              Синхронизировать с HH.ru
+            </button>
+          )}
         </div>
-      )}
+      </div>
 
       {!connected && (
         <div className="panel p-2.5 flex items-center gap-2 border-yellow-500/20 bg-yellow-500/5">
           <Icon name="AlertCircle" size={13} className="text-yellow-500 shrink-0" />
           <span className="text-xs text-muted-foreground">
-            Показаны <strong>тестовые данные</strong>. Подключите HH.ru в Настройках → Интеграции для загрузки реальных откликов.
+            Подключите HH.ru в Настройках → Интеграции для синхронизации откликов.
           </span>
         </div>
       )}

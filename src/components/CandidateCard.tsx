@@ -1,9 +1,9 @@
-import { useHHResponses } from '@/hooks/useHHResponses';
+import { useCandidates } from '@/hooks/useCandidates';
 import StatusBadge from '@/components/StatusBadge';
 import Icon from '@/components/ui/icon';
 
 export default function CandidateCard({ candidateId, onBack }: { candidateId: string; onBack: () => void }) {
-  const { candidates } = useHHResponses();
+  const { candidates } = useCandidates();
   const c = candidates.find((x) => x.id === candidateId);
   if (!c) return null;
 

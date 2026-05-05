@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "name": "GET stats",
+      "method": "GET",
+      "path": "/?action=stats",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    }
+  ]
+}

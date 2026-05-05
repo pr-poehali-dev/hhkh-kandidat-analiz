@@ -1,4 +1,4 @@
-import { useHHResponses } from '@/hooks/useHHResponses';
+import { useCandidates } from '@/hooks/useCandidates';
 import { historyLogs, statusLabels, CandidateStatus } from '@/data/mockData';
 import Icon from '@/components/ui/icon';
 import StatusBadge from '@/components/StatusBadge';
@@ -13,7 +13,7 @@ const funnelStages: { status: CandidateStatus; color: string }[] = [
 ];
 
 export default function Dashboard() {
-  const { candidates, vacancies, connected, loading } = useHHResponses();
+  const { candidates, vacancies, connected, loading } = useCandidates();
 
   const statusCounts = candidates.reduce((acc, c) => {
     acc[c.status] = (acc[c.status] || 0) + 1;
@@ -31,19 +31,7 @@ export default function Dashboard() {
     { label: 'Отказов', value: statusCounts['reject'] || 0, icon: 'UserX' },
   ];
 
-  if (!connected) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4 text-center animate-fade-in">
-        <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-          <Icon name="Link" size={22} className="text-muted-foreground" />
-        </div>
-        <div>
-          <div className="text-sm font-medium text-foreground mb-1">HH.ru не подключён</div>
-          <div className="text-xs text-muted-foreground">Перейдите в Настройки → Интеграции и подключите аккаунт</div>
-        </div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="flex flex-col gap-3 animate-fade-in">

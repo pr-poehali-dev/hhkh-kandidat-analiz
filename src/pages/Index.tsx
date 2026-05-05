@@ -6,7 +6,7 @@ import CandidateCard from '@/components/CandidateCard';
 import CalendarView from '@/components/CalendarView';
 import HistoryView from '@/components/HistoryView';
 import Settings from '@/components/Settings';
-import { useHHResponses } from '@/hooks/useHHResponses';
+import { useCandidates } from '@/hooks/useCandidates';
 
 type Section = 'dashboard' | 'responses' | 'card' | 'calendar' | 'history' | 'settings';
 
@@ -32,7 +32,7 @@ export default function Index() {
     setSelectedCandidateId(null);
   };
 
-  const { candidates } = useHHResponses();
+  const { candidates } = useCandidates();
   const newCount = candidates.filter((c) => c.status === 'new').length;
 
   const getBadge = (id: string) => {

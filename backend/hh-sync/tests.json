@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "No token returns 401",
+      "method": "POST",
+      "path": "/",
+      "body": "{}",
+      "expectedStatus": 401,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
