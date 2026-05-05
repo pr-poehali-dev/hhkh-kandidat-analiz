@@ -2,6 +2,7 @@ import json
 import os
 import urllib.request
 import urllib.parse
+import urllib.error
 
 
 def handler(event: dict, context) -> dict:
@@ -39,30 +40,40 @@ def handler(event: dict, context) -> dict:
             'body': json.dumps({'auth_url': auth_url}),
         }
 
-    # POST /hh-auth — обмениваем code на токен
+    # POST /hh-auth — обмен code или refresh_token на новый токен
     if method == 'POST':
         body = json.loads(event.get('body') or '{}')
-        code = body.get('code')
-        redirect_uri = body.get('redirect_uri', 'https://localhost')
-
-        if not code:
-            return {
-                'statusCode': 400,
-                'headers': {**CORS, 'Content-Type': 'application/json'},
-                'body': json.dumps({'error': 'code is required'}),
-            }
-
         client_id = os.environ['HH_CLIENT_ID']
         client_secret = os.environ['HH_CLIENT_SECRET']
 
-        data = urllib.parse.urlencode({
-            'grant_type': 'authorization_code',
-            'client_id': client_id,
-            'client_secret': client_secret,
-            'code': code,
-            'redirect_uri': redirect_uri,
-        }).encode()
+        refresh_token = body.get('refresh_token')
+        code = body.get('code')
 
+        if refresh_token:
+            # Обновление токена через refresh_token
+            params = {
+                'grant_type': 'refresh_token',
+                'refresh_token': refresh_token,
+                'client_id': client_id,
+                'client_secret': client_secret,
+            }
+        elif code:
+            # Первичный обмен кода на токен
+            params = {
+                'grant_type': 'authorization_code',
+                'client_id': client_id,
+                'client_secret': client_secret,
+                'code': code,
+                'redirect_uri': body.get('redirect_uri', 'https://localhost'),
+            }
+        else:
+            return {
+                'statusCode': 400,
+                'headers': {**CORS, 'Content-Type': 'application/json'},
+                'body': json.dumps({'error': 'code or refresh_token is required'}),
+            }
+
+        data = urllib.parse.urlencode(params).encode()
         req = urllib.request.Request(
             'https://hh.ru/oauth/token',
             data=data,
@@ -70,8 +81,16 @@ def handler(event: dict, context) -> dict:
             method='POST',
         )
 
-        with urllib.request.urlopen(req) as resp:
-            token_data = json.loads(resp.read())
+        try:
+            with urllib.request.urlopen(req) as resp:
+                token_data = json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            error_body = e.read().decode('utf-8', errors='ignore')
+            return {
+                'statusCode': e.code,
+                'headers': {**CORS, 'Content-Type': 'application/json'},
+                'body': json.dumps({'error': f'HH.ru error {e.code}', 'details': error_body}),
+            }
 
         return {
             'statusCode': 200,

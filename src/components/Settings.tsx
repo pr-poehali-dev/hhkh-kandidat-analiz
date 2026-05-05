@@ -20,6 +20,7 @@ const criteria = [
 
 function HHIntegration() {
   const [inputValue, setInputValue] = useState('');
+  const [refreshValue, setRefreshValue] = useState('');
   const [status, setStatus] = useState<'idle' | 'checking' | 'connected' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [showInput, setShowInput] = useState(false);
@@ -40,11 +41,13 @@ function HHIntegration() {
     setErrorMsg('');
     try {
       localStorage.setItem('hh_access_token', t);
+      if (refreshValue.trim()) localStorage.setItem('hh_refresh_token', refreshValue.trim());
       localStorage.setItem('hh_login', 'HH.ru работодатель');
       setHhLogin('HH.ru работодатель');
       setStatus('connected');
       setShowInput(false);
       setInputValue('');
+      setRefreshValue('');
     } catch (e) {
       setStatus('error');
       setErrorMsg(e instanceof Error ? e.message : 'Ошибка проверки токена');
@@ -112,16 +115,22 @@ function HHIntegration() {
             <li>В разделе «Тестирование» нажмите <strong className="text-foreground">«Получить токен»</strong></li>
             <li>Скопируйте значение поля <strong className="text-foreground">access_token</strong> и вставьте ниже</li>
           </ol>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2">
             <input
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Вставьте access_token..."
-              className="flex-1 bg-background border border-border rounded px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary font-mono"
+              placeholder="access_token..."
+              className="bg-background border border-border rounded px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary font-mono"
+            />
+            <input
+              value={refreshValue}
+              onChange={(e) => setRefreshValue(e.target.value)}
+              placeholder="refresh_token (для автообновления)..."
+              className="bg-background border border-border rounded px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary font-mono"
             />
             <button
               onClick={handleSave}
-              disabled={!inputValue.trim() || status === 'checking'}
+              disabled={!inputValue.trim()}
               className="text-xs px-3 py-1.5 rounded bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               Сохранить

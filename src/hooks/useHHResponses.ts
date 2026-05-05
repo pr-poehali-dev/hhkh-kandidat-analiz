@@ -2,6 +2,28 @@ import { useState, useEffect, useCallback } from 'react';
 import { Candidate, CandidateStatus } from '@/data/mockData';
 
 const HH_RESPONSES_URL = 'https://functions.poehali.dev/2a41e2d1-38ab-4c9b-aa98-6800a8333690';
+const HH_AUTH_URL = 'https://functions.poehali.dev/9500c236-1e3e-4291-99b9-5610c7718359';
+
+// Обновляет access_token через refresh_token, возвращает новый токен или null
+async function tryRefreshToken(): Promise<string | null> {
+  const refreshToken = localStorage.getItem('hh_refresh_token');
+  if (!refreshToken) return null;
+  try {
+    const res = await fetch(HH_AUTH_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.access_token) return null;
+    localStorage.setItem('hh_access_token', data.access_token);
+    if (data.refresh_token) localStorage.setItem('hh_refresh_token', data.refresh_token);
+    return data.access_token;
+  } catch {
+    return null;
+  }
+}
 
 const mapHHStatus = (state: string): CandidateStatus => {
   switch (state) {
@@ -71,10 +93,22 @@ export function useHHResponses(): UseHHResponsesResult {
   const connected = Boolean(token);
 
   const fetchWithToken = useCallback(async (url: string) => {
-    const res = await fetch(url, { headers: { 'X-HH-Token': token! } });
+    let currentToken = localStorage.getItem('hh_access_token')!;
+    let res = await fetch(url, { headers: { 'X-HH-Token': currentToken } });
+
+    // При 401 — пробуем обновить токен автоматически
+    if (res.status === 401) {
+      const newToken = await tryRefreshToken();
+      if (newToken) {
+        currentToken = newToken;
+        res = await fetch(url, { headers: { 'X-HH-Token': currentToken } });
+      }
+    }
+
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       const details = data.details ? ` (${data.details})` : '';
+      if (res.status === 401) throw new Error('Токен HH.ru устарел — переподключите аккаунт в Настройках');
       throw new Error(`${data.error || `Ошибка HH.ru: ${res.status}`}${details}`);
     }
     return res.json();
