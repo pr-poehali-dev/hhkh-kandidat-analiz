@@ -29,7 +29,6 @@ function HHIntegration() {
   useEffect(() => {
     const saved = localStorage.getItem('hh_access_token');
     if (saved) {
-      setToken(saved);
       setStatus('connected');
       setHhLogin(localStorage.getItem('hh_login') || '');
     }
@@ -56,6 +55,7 @@ function HHIntegration() {
 
   const handleDisconnect = () => {
     localStorage.removeItem('hh_access_token');
+    localStorage.removeItem('hh_refresh_token');
     localStorage.removeItem('hh_login');
     setHhLogin('');
     setStatus('idle');
