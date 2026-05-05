@@ -17,18 +17,22 @@ function PsytestsImport() {
     setErrorMsg('');
     setResult(null);
     try {
-      const buffer = await file.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-      let binary = '';
-      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-      const base64 = btoa(binary);
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
       const res = await fetch(`${TESTS_SYNC_URL}?action=upload_csv`, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
         body: base64,
       });
       const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || 'Ошибка загрузки');
+      if (!res.ok || data.error) throw new Error(data.error + (data.debug ? ' | ' + JSON.stringify(data.debug) : '') || 'Ошибка загрузки');
       setResult(data);
       setStatus('success');
     } catch (err) {
