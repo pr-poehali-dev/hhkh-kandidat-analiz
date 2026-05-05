@@ -190,6 +190,24 @@ def handler(event: dict, context) -> dict:
     if action == 'check_mail':
         return action_check_mail(CORS)
 
+    # Смена статуса на HH.ru через токен из секретов
+    if action == 'hh_set_status':
+        try:
+            body = json.loads(event.get('body') or '{}')
+        except Exception:
+            body = {}
+        negotiation_id = body.get('negotiation_id', '') or params.get('negotiation_id', '')
+        hh_action = body.get('hh_action', '') or params.get('hh_action', '')
+        token = os.environ.get('HH_ACCESS_TOKEN', '')
+        if not negotiation_id or not hh_action or not token:
+            return {'statusCode': 400, 'headers': {**CORS}, 'body': json.dumps({'error': 'negotiation_id, hh_action and HH_ACCESS_TOKEN required'})}
+        try:
+            status_code = hh_put_status(negotiation_id, hh_action, token)
+            return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json'}, 'body': json.dumps({'ok': True, 'hh_status': status_code})}
+        except urllib.error.HTTPError as e:
+            err = e.read().decode('utf-8', errors='ignore')
+            return {'statusCode': e.code, 'headers': {**CORS}, 'body': json.dumps({'error': err})}
+
     conn = get_db()
     try:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
