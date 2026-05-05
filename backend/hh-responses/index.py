@@ -74,45 +74,42 @@ def handler(event: dict, context) -> dict:
                 'body': json.dumps({'error': f'HH.ru error {e.code}', 'details': error_body}),
             }
 
+        employer_states = col_data.get('employer_states', [])
         collections = col_data.get('collections', [])
-        direct_items = col_data.get('items', [])
 
-        # Если нет коллекций или все пустые — возвращаем items прямо из первого запроса
-        total_in_collections = sum(len(c.get('items', [])) for c in collections)
-        if direct_items and (not collections or total_in_collections == 0):
-            for item in direct_items:
-                state_id = (item.get('state') or {}).get('id', 'response')
-                item['_collection_id'] = state_id
-            return {
-                'statusCode': 200,
-                'headers': {**CORS, 'Content-Type': 'application/json'},
-                'body': json.dumps({'items': direct_items, 'found': len(direct_items)}),
-            }
+        # Строим map: col_id -> url из collections объектов
+        col_url_map = {c.get('id', ''): c.get('url', '') for c in collections}
+
+        # Список всех статусов
+        all_state_ids = [s.get('id', '') for s in employer_states]
+        if not all_state_ids:
+            all_state_ids = [c.get('id', '') for c in collections]
 
         all_items = []
         seen_ids = set()
 
-        for col in collections:
-            col_url = col.get('url', '')
-            col_id = col.get('id', '')
-            if not col_url:
+        for col_id in all_state_ids:
+            if not col_id:
                 continue
-            # Не пропускаем ни одну коллекцию — загружаем всё
-
-            paged_url = f'{col_url}&per_page=100&page=0'
+            # Используем URL из collections если есть (уже содержит vacancy_id)
+            # иначе строим сами
+            col_url = col_url_map.get(col_id, '')
+            if col_url:
+                paged_url = col_url  # URL уже содержит vacancy_id
+            else:
+                paged_url = f'https://api.hh.ru/negotiations/{col_id}?vacancy_id={vacancy_id}'
             req_items = urllib.request.Request(paged_url, headers=hh_headers)
             try:
                 with urllib.request.urlopen(req_items) as r:
                     items_data = json.loads(r.read())
+                for item in items_data.get('items', []):
+                    item_id = item.get('id')
+                    if item_id not in seen_ids:
+                        seen_ids.add(item_id)
+                        item['_collection_id'] = col_id
+                        all_items.append(item)
             except Exception:
                 continue
-
-            for item in items_data.get('items', []):
-                item_id = item.get('id')
-                if item_id not in seen_ids:
-                    seen_ids.add(item_id)
-                    item['_collection_id'] = col_id
-                    all_items.append(item)
 
         return {
             'statusCode': 200,
@@ -121,7 +118,8 @@ def handler(event: dict, context) -> dict:
         }
     elif resource == 'debug_negotiations':
         vacancy_id = params.get('vacancy_id', '')
-        url = f'https://api.hh.ru/negotiations?vacancy_id={vacancy_id}&per_page=5'
+        col_id = params.get('col_id', 'assessment')
+        url = f'https://api.hh.ru/negotiations/{col_id}?vacancy_id={vacancy_id}&per_page=5'
     elif resource == 'me':
         url = 'https://api.hh.ru/me'
     elif resource == 'employer':
