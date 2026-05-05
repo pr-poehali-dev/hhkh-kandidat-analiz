@@ -1,6 +1,25 @@
 import json
+import os
 import urllib.request
 import urllib.error
+import psycopg2
+
+SCHEMA = 't_p93338434_hhkh_kandidat_analiz'
+ALLOWED_STATUSES_FOR_TEST = ('consider', 'phone_interview')
+
+
+def get_db():
+    return psycopg2.connect(os.environ['DATABASE_URL'])
+
+
+def hh_put_status(negotiation_id, action, token):
+    url = f'https://api.hh.ru/negotiations/{action}/{negotiation_id}'
+    req = urllib.request.Request(url, data=b'', headers={
+        'Authorization': f'Bearer {token}',
+        'User-Agent': 'HireDesk/1.0 (support@hiredesk.ru)',
+    }, method='PUT')
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return r.status
 
 
 def fetch_json(url, hh_headers):
@@ -62,15 +81,86 @@ def fetch_collection(col_id, vacancy_id, hh_headers):
     return items
 
 
+def handle_webhook(event: dict) -> dict:
+    """Обработка вебхука от HH.ru — новое сообщение от кандидата"""
+    CORS = {'Access-Control-Allow-Origin': '*'}
+
+    # GET — верификация подписки HH.ru
+    if event.get('httpMethod') == 'GET':
+        return {'statusCode': 200, 'headers': {**CORS}, 'body': 'ok'}
+
+    try:
+        body = json.loads(event.get('body') or '{}')
+    except Exception:
+        return {'statusCode': 200, 'headers': {**CORS}, 'body': 'bad json'}
+
+    event_type = body.get('type', '')
+    if event_type != 'NEW_NEGOTIATION_MESSAGE':
+        return {'statusCode': 200, 'headers': {**CORS}, 'body': 'ignored'}
+
+    negotiation_id = str((body.get('object') or {}).get('id', ''))
+    if not negotiation_id:
+        return {'statusCode': 200, 'headers': {**CORS}, 'body': 'no id'}
+
+    token = os.environ.get('HH_ACCESS_TOKEN', '')
+    if not token:
+        return {'statusCode': 200, 'headers': {**CORS}, 'body': 'no token'}
+
+    conn = get_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(f'''
+                SELECT hh_status, id FROM {SCHEMA}.applications
+                WHERE hh_negotiation_id = %s
+            ''', (negotiation_id,))
+            row = cur.fetchone()
+            if not row:
+                return {'statusCode': 200, 'headers': {**CORS}, 'body': 'not in db'}
+
+            current_status, app_id = row
+            if current_status not in ALLOWED_STATUSES_FOR_TEST:
+                return {'statusCode': 200, 'headers': {**CORS}, 'body': f'skip:{current_status}'}
+
+            try:
+                hh_put_status(negotiation_id, 'assessment', token)
+            except urllib.error.HTTPError as e:
+                return {'statusCode': 200, 'headers': {**CORS}, 'body': f'hh_err:{e.code}'}
+
+            cur.execute(f'''
+                UPDATE {SCHEMA}.applications
+                SET hh_status='assessment', status='test', updated_at=NOW()
+                WHERE id=%s
+            ''', (app_id,))
+            cur.execute(f'''
+                INSERT INTO {SCHEMA}.interactions
+                    (candidate_id, application_id, type, content, author)
+                SELECT candidate_id, id,
+                    'status_change',
+                    'Автоперевод на тестирование (ответил на сообщение)',
+                    'Система'
+                FROM {SCHEMA}.applications WHERE id=%s
+            ''', (app_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {'statusCode': 200, 'headers': {**CORS}, 'body': 'ok'}
+
+
 def handler(event: dict, context) -> dict:
-    """Загрузка откликов и вакансий работодателя с HH.ru"""
+    """Загрузка откликов и вакансий работодателя с HH.ru + обработка вебхуков"""
+
+    # Вебхук от HH.ru — отдельный путь
+    params_check = event.get('queryStringParameters') or {}
+    if params_check.get('webhook') == '1':
+        return handle_webhook(event)
 
     if event.get('httpMethod') == 'OPTIONS':
         return {
             'statusCode': 200,
             'headers': {
                 'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
                 'Access-Control-Allow-Headers': 'Content-Type, X-HH-Token',
                 'Access-Control-Max-Age': '86400',
             },
@@ -170,6 +260,32 @@ def handler(event: dict, context) -> dict:
         except urllib.error.HTTPError as e:
             err = e.read().decode('utf-8', errors='ignore')
             return {'statusCode': e.code, 'headers': {**CORS, 'Content-Type': 'application/json'},
+                    'body': json.dumps({'ok': False, 'status': e.code, 'error': err})}
+    elif resource == 'register_webhook':
+        # Регистрируем вебхук на HH.ru
+        webhook_url = 'https://functions.poehali.dev/2a41e2d1-38ab-4c9b-aa98-6800a8333690?webhook=1'
+        import urllib.parse
+        # HH.ru ожидает JSON тело с employer_id
+        data = json.dumps({
+            'url': webhook_url,
+            'actions': ['NEGOTIATION_STATUS_CHANGED'],
+            'employer_id': 10960749,
+        }).encode('utf-8')
+        hh_headers['Content-Type'] = 'application/json'
+        req_wh = urllib.request.Request(
+            'https://api.hh.ru/webhook/subscriptions',
+            data=data,
+            headers={**hh_headers, 'Content-Type': 'application/x-www-form-urlencoded'},
+            method='POST'
+        )
+        try:
+            with urllib.request.urlopen(req_wh, timeout=10) as r:
+                resp_body = r.read().decode('utf-8')
+                return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json'},
+                        'body': json.dumps({'ok': True, 'response': resp_body})}
+        except urllib.error.HTTPError as e:
+            err = e.read().decode('utf-8', errors='ignore')
+            return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json'},
                     'body': json.dumps({'ok': False, 'status': e.code, 'error': err})}
     elif resource == 'me':
         url = 'https://api.hh.ru/me'
