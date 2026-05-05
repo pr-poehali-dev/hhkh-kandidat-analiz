@@ -154,6 +154,7 @@ export function useCandidates(): UseCandidatesResult {
 
         const statesData = await hhFetch(`${HH_RESPONSES_URL}?resource=negotiations_states&vacancy_id=${vacId}`);
         const states: string[] = statesData.states || [];
+        console.log(`[HH статусы] вакансия "${vacName}":`, states);
 
         for (const colId of states) {
           try {
