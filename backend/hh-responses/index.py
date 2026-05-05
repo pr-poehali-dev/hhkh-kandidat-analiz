@@ -142,6 +142,18 @@ def handler(event: dict, context) -> dict:
         col_id = params.get('col_id', 'assessment')
         page = params.get('page', '0')
         url = f'https://api.hh.ru/negotiations/{col_id}?vacancy_id={vacancy_id}&per_page=50&page={page}'
+    elif resource == 'templates':
+        # Получить список шаблонов писем работодателя
+        employer_id = params.get('employer_id', '')
+        url = f'https://api.hh.ru/message_templates?employer_id={employer_id}'
+        try:
+            data = fetch_json(url, hh_headers)
+            return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json'},
+                    'body': json.dumps(data)}
+        except urllib.error.HTTPError as e:
+            err = e.read().decode('utf-8', errors='ignore')
+            return {'statusCode': e.code, 'headers': {**CORS}, 'body': json.dumps({'error': err})}
+
     elif resource == 'test_action':
         # Тест смены статуса отклика
         negotiation_id = params.get('negotiation_id', '')
