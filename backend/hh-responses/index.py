@@ -76,18 +76,42 @@ def handler(event: dict, context) -> dict:
 
         collections = col_data.get('collections', [])
         all_items = []
+        seen_ids = set()
+
         for col in collections:
             col_url = col.get('url', '')
-            if not col_url or col.get('hidden'):
+            col_id = col.get('id', '')
+            if not col_url:
                 continue
-            col_url += '&per_page=50'
-            req_items = urllib.request.Request(col_url, headers=hh_headers)
-            try:
-                with urllib.request.urlopen(req_items) as r:
-                    items_data = json.loads(r.read())
-                all_items.extend(items_data.get('items', []))
-            except Exception:
+            # Пропускаем только скрытые коллекции без откликов
+            # hidden=True означает пустую/неактивную коллекцию
+            if col.get('hidden') and col.get('count', 0) == 0:
                 continue
+
+            # Загружаем все страницы коллекции
+            page = 0
+            while True:
+                paged_url = f'{col_url}&per_page=50&page={page}'
+                req_items = urllib.request.Request(paged_url, headers=hh_headers)
+                try:
+                    with urllib.request.urlopen(req_items) as r:
+                        items_data = json.loads(r.read())
+                except Exception:
+                    break
+
+                page_items = items_data.get('items', [])
+                for item in page_items:
+                    item_id = item.get('id')
+                    if item_id not in seen_ids:
+                        seen_ids.add(item_id)
+                        # Добавляем collection_id чтобы маппить статус точно
+                        item['_collection_id'] = col_id
+                        all_items.append(item)
+
+                pages = items_data.get('pages', 1)
+                page += 1
+                if page >= pages:
+                    break
 
         return {
             'statusCode': 200,

@@ -27,13 +27,15 @@ async function tryRefreshToken(): Promise<string | null> {
 
 const mapHHStatus = (state: string): CandidateStatus => {
   switch (state) {
-    case 'response': return 'new';           // Все неразобранные
-    case 'consider': return 'review';        // Подумать
-    case 'phone_interview': return 'review'; // Первичный контакт
-    case 'assessment': return 'test';        // Тестовое задание
-    case 'interview': return 'interview';    // Собеседование
-    case 'offer': return 'offer';            // Предложение о работе
-    case 'hired': return 'offer';            // Выход на работу
+    // Collection IDs (точные)
+    case 'response': return 'new';
+    case 'consider': return 'review';
+    case 'phone_interview': return 'review';
+    case 'assessment': return 'test';
+    case 'interview': return 'interview';
+    case 'offer': return 'offer';
+    case 'hired': return 'offer';
+    // Отказы
     case 'discard_by_employer': return 'reject';
     case 'discard_by_applicant': return 'reject';
     case 'discard_no_interaction': return 'reject';
@@ -59,10 +61,12 @@ const mapHHNegotiation = (item: Record<string, unknown>, index: number, vacancyN
   const expYears = Math.round(expMonths / 12);
 
   const vacancyObj = (item.vacancy as Record<string, unknown>) || {};
-  // Позиция — название вакансии (передаётся снаружи или из объекта отклика)
   const position = vacancyName || (vacancyObj.name as string) || 'Не указано';
   const resumeTitle = (resume.title as string) || '';
-  const state = ((item.state as Record<string, unknown>)?.id as string) || 'response';
+  // Используем _collection_id (более точный) или state.id
+  const collectionId = (item._collection_id as string) || '';
+  const stateId = ((item.state as Record<string, unknown>)?.id as string) || 'response';
+  const state = collectionId || stateId;
 
   return {
     id: `hh-${item.id || index}`,
