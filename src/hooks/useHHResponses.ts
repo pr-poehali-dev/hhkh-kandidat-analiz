@@ -27,12 +27,18 @@ async function tryRefreshToken(): Promise<string | null> {
 
 const mapHHStatus = (state: string): CandidateStatus => {
   switch (state) {
-    case 'response': return 'new';
-    case 'consider': return 'review';
-    case 'phone_interview': return 'interview';
-    case 'interview': return 'interview';
-    case 'offer': return 'offer';
-    case 'discard': return 'reject';
+    case 'response': return 'new';           // Все неразобранные
+    case 'consider': return 'review';        // Подумать
+    case 'phone_interview': return 'review'; // Первичный контакт
+    case 'assessment': return 'test';        // Тестовое задание
+    case 'interview': return 'interview';    // Собеседование
+    case 'offer': return 'offer';            // Предложение о работе
+    case 'hired': return 'offer';            // Выход на работу
+    case 'discard_by_employer': return 'reject';
+    case 'discard_by_applicant': return 'reject';
+    case 'discard_no_interaction': return 'reject';
+    case 'discard_vacancy_closed': return 'reject';
+    case 'discard_to_other_vacancy': return 'reject';
     default: return 'new';
   }
 };
