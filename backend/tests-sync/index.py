@@ -325,9 +325,10 @@ def parse_psytests_table(html):
 
 def detect_test_type(test_name):
     tn = test_name.lower()
-    if 'кеттел' in tn or 'cattell' in tn or '16pf' in tn or 'кеттлер' in tn:
+    # Проверяем и latin и кириллицу (после декодирования)
+    if any(x in tn for x in ['кеттел', 'cattell', '16pf', 'кеттлер', 'ctla', 'ctl']):
         return 'kettell'
-    if 'механич' in tn or 'беннет' in tn or 'bennett' in tn:
+    if any(x in tn for x in ['механич', 'беннет', 'bennett', 'понятлив', 'mec']):
         return 'bennett'
     return 'other'
 
@@ -576,17 +577,11 @@ def handler(event: dict, context) -> dict:
 
         if action == 'upload_csv':
             body_raw = event.get('body') or ''
-            if event.get('isBase64Encoded'):
-                raw = base64.b64decode(body_raw)
-            else:
-                raw = body_raw.encode('utf-8') if isinstance(body_raw, str) else body_raw
-            # Пробуем декодировать как windows-1251 (psytests экспортирует в нём)
-            for enc in ('windows-1251', 'utf-8-sig', 'utf-8'):
-                try:
-                    csv_bytes = raw.decode(enc).encode('utf-8')
-                    break
-                except Exception:
-                    csv_bytes = raw
+            # Фронтенд всегда шлёт base64 бинарных байт файла
+            try:
+                csv_bytes = base64.b64decode(body_raw)
+            except Exception:
+                csv_bytes = body_raw.encode('utf-8')
 
             # Диагностика
             debug_info = {

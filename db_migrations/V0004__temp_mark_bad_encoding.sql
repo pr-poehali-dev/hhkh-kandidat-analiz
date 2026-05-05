@@ -1,0 +1,1 @@
+UPDATE t_p93338434_hhkh_kandidat_analiz.test_results SET source_name = NULL WHERE source_name LIKE '%?%' OR source_name ~ '[^\x00-\x7F\xC0-\xFF]';
