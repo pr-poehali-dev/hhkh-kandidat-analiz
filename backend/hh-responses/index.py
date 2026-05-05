@@ -1,13 +1,33 @@
 import json
-import os
 import urllib.request
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 def fetch_json(url, hh_headers):
     req = urllib.request.Request(url, headers=hh_headers)
-    with urllib.request.urlopen(req, timeout=10) as r:
+    with urllib.request.urlopen(req, timeout=8) as r:
         return json.loads(r.read())
+
+
+def fetch_collection(col_id, vacancy_id, hh_headers):
+    """Загружает все страницы одной коллекции"""
+    items = []
+    page = 0
+    while True:
+        url = f'https://api.hh.ru/negotiations/{col_id}?vacancy_id={vacancy_id}&per_page=50&page={page}'
+        try:
+            data = fetch_json(url, hh_headers)
+        except Exception:
+            break
+        for item in data.get('items', []):
+            item['_collection_id'] = col_id
+            items.append(item)
+        pages = data.get('pages', 1)
+        page += 1
+        if page >= pages:
+            break
+    return items
 
 
 def handler(event: dict, context) -> dict:
@@ -64,7 +84,7 @@ def handler(event: dict, context) -> dict:
                 'body': json.dumps({'error': 'vacancy_id is required'}),
             }
 
-        # Получаем список employer_states для этой вакансии
+        # Получаем список статусов
         try:
             col_data = fetch_json(
                 f'https://api.hh.ru/negotiations?vacancy_id={vacancy_id}&per_page=1',
@@ -81,29 +101,25 @@ def handler(event: dict, context) -> dict:
         employer_states = col_data.get('employer_states', [])
         state_ids = [s['id'] for s in employer_states if s.get('id')]
 
+        # Загружаем все коллекции параллельно
         all_items = []
         seen_ids = set()
 
-        for col_id in state_ids:
-            page = 0
-            while True:
-                url_page = f'https://api.hh.ru/negotiations/{col_id}?vacancy_id={vacancy_id}&per_page=50&page={page}'
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            futures = {
+                executor.submit(fetch_collection, col_id, vacancy_id, hh_headers): col_id
+                for col_id in state_ids
+            }
+            for future in as_completed(futures):
                 try:
-                    data = fetch_json(url_page, hh_headers)
+                    items = future.result()
+                    for item in items:
+                        item_id = item.get('id')
+                        if item_id and item_id not in seen_ids:
+                            seen_ids.add(item_id)
+                            all_items.append(item)
                 except Exception:
-                    break
-
-                for item in data.get('items', []):
-                    item_id = item.get('id')
-                    if item_id and item_id not in seen_ids:
-                        seen_ids.add(item_id)
-                        item['_collection_id'] = col_id
-                        all_items.append(item)
-
-                pages = data.get('pages', 1)
-                page += 1
-                if page >= pages:
-                    break
+                    pass
 
         return {
             'statusCode': 200,
