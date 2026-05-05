@@ -448,14 +448,217 @@ def handler(event: dict, context) -> dict:
             data = get_candidate_tests(conn, int(candidate_id))
             return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json'}, 'body': json.dumps(data, ensure_ascii=False, default=str)}
 
-        if action == 'debug_psytests':
+        if action == 'debug_eurl':
             try:
                 opener = psytests_login()
-                html = fetch_psytests_data(opener)
+                # Сначала инициализируем сессию через eurl
+                for t in ['cabdata', 'cab']:
+                    try:
+                        req = urllib.request.Request(f'https://psytests.org/eurl?p=psy&t={t}&u=1400', headers={'User-Agent': 'Mozilla/5.0'})
+                        opener.open(req, timeout=5)
+                    except Exception:
+                        pass
+
+                results = {}
+                # Пробуем загрузить данные после инициализации
+                for url in [
+                    'https://psytests.org/cabdata.html',
+                    'https://psytests.org/cabdata.html?fmt=json',
+                    'https://psytests.org/cabdata.html?out=json',
+                    'https://psytests.org/cabdata.html?format=json',
+                    'https://psytests.org/cab.html',
+                ]:
+                    try:
+                        req = urllib.request.Request(url, headers={
+                            'User-Agent': 'Mozilla/5.0',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json, */*',
+                        })
+                        with opener.open(req, timeout=10) as r:
+                            body = r.read().decode('windows-1251', errors='replace')
+                            # Ищем таблицы с данными
+                            has_table = '<table' in body
+                            has_tr = '<tr' in body
+                            td_count = body.count('<td')
+                            results[url] = {'len': len(body), 'has_table': has_table, 'has_tr': has_tr, 'td_count': td_count, 'snippet': body[body.find('<table'):body.find('<table')+800] if has_table else body[:300]}
+                    except urllib.error.HTTPError as e:
+                        results[url] = {'error': e.code}
+                    except Exception as e:
+                        results[url] = {'error': str(e)[:100]}
                 return {
                     'statusCode': 200,
                     'headers': {**CORS, 'Content-Type': 'application/json'},
-                    'body': json.dumps({'html_len': len(html), 'html_snippet': html[:2000]}, ensure_ascii=False)
+                    'body': json.dumps(results, ensure_ascii=False)
+                }
+            except Exception as e:
+                return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'error': str(e)})}
+
+        if action == 'debug_js2':
+            try:
+                opener = psytests_login()
+                req = urllib.request.Request('https://psytests.org/psy135.js', headers={'User-Agent': 'Mozilla/5.0'})
+                with opener.open(req, timeout=15) as r:
+                    body = r.read().decode('windows-1251', errors='replace')
+                # Ищем всё вокруг cabdata
+                idx = body.find('cabdata')
+                snippets = []
+                while idx != -1 and len(snippets) < 20:
+                    snippets.append(body[max(0,idx-100):idx+200])
+                    idx = body.find('cabdata', idx+1)
+                # Также ищем все XHR open вызовы с контекстом
+                xhr_pattern = re.findall(r'.{0,50}\.open\(.{0,100}', body)
+                return {
+                    'statusCode': 200,
+                    'headers': {**CORS, 'Content-Type': 'application/json'},
+                    'body': json.dumps({'cabdata_contexts': snippets, 'xhr_calls': xhr_pattern[:30]}, ensure_ascii=False)
+                }
+            except Exception as e:
+                return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'error': str(e)})}
+
+        if action == 'debug_data':
+            try:
+                opener = psytests_login()
+                # /user возвращает user_id=1400, пробуем эндпоинты с ним
+                user_id = '1400'
+                results = {}
+                for url, method, data in [
+                    (f'https://psytests.org/eurl?p=psy&t=cabdata&u={user_id}', 'GET', None),
+                    (f'https://psytests.org/eurl?p=psy&t=cab&u={user_id}', 'GET', None),
+                    ('https://psytests.org/eurl?p=psy&t=cabdata', 'GET', None),
+                    (f'https://psytests.org/cabdata.html?u={user_id}', 'GET', None),
+                    ('https://psytests.org/cabjson', 'GET', None),
+                    ('https://psytests.org/cabget', 'GET', None),
+                    ('https://psytests.org/run/user', 'POST', b'vpage=use&vpath=cabdata'),
+                    (f'https://psytests.org/run/user?uid={user_id}&page=cabdata', 'GET', None),
+                ]:
+                    try:
+                        req = urllib.request.Request(url, data=data, headers={
+                            'User-Agent': 'Mozilla/5.0',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Referer': 'https://psytests.org/cabdata.html',
+                        }, method=method)
+                        with opener.open(req, timeout=10) as r:
+                            body = r.read().decode('windows-1251', errors='replace')
+                            results[f'{method} {url}'] = {'status': r.status, 'len': len(body), 'snippet': body[:400]}
+                    except urllib.error.HTTPError as e:
+                        results[f'{method} {url}'] = {'error': e.code}
+                    except Exception as e:
+                        results[f'{method} {url}'] = {'error': str(e)[:100]}
+                return {
+                    'statusCode': 200,
+                    'headers': {**CORS, 'Content-Type': 'application/json'},
+                    'body': json.dumps(results, ensure_ascii=False)
+                }
+            except Exception as e:
+                return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'error': str(e)})}
+
+        if action == 'debug_user':
+            try:
+                opener = psytests_login()
+                results = {}
+                for url, method, data in [
+                    ('https://psytests.org/user', 'GET', None),
+                    ('https://psytests.org/user?page=cabdata', 'GET', None),
+                    ('https://psytests.org/user?p=cabdata', 'GET', None),
+                    ('https://psytests.org/user', 'POST', b'page=cabdata&vpage=use'),
+                    ('https://psytests.org/user', 'POST', b'vpage=use'),
+                    ('https://psytests.org/user', 'POST', b'action=cabdata'),
+                ]:
+                    try:
+                        req = urllib.request.Request(url, data=data, headers={
+                            'User-Agent': 'Mozilla/5.0',
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json, text/html, */*',
+                            'Referer': 'https://psytests.org/cabdata.html',
+                        }, method=method)
+                        with opener.open(req, timeout=10) as r:
+                            body = r.read().decode('windows-1251', errors='replace')
+                            results[f'{method} {url}'] = {'status': r.status, 'len': len(body), 'snippet': body[:300]}
+                    except urllib.error.HTTPError as e:
+                        results[f'{method} {url}'] = {'error': e.code, 'body': e.read().decode('utf-8', errors='replace')[:200]}
+                    except Exception as e:
+                        results[f'{method} {url}'] = {'error': str(e)}
+                return {
+                    'statusCode': 200,
+                    'headers': {**CORS, 'Content-Type': 'application/json'},
+                    'body': json.dumps(results, ensure_ascii=False)
+                }
+            except Exception as e:
+                return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'error': str(e)})}
+
+        if action == 'debug_js':
+            try:
+                opener = psytests_login()
+                req = urllib.request.Request('https://psytests.org/psy135.js', headers={'User-Agent': 'Mozilla/5.0'})
+                with opener.open(req, timeout=15) as r:
+                    body = r.read().decode('windows-1251', errors='replace')
+                fetch_calls = re.findall(r'fetch\(["\`]([^"\'`]+)["\`]', body)
+                xhr_open = re.findall(r'\.open\(["\'][A-Z]+["\'],\s*["\']([^"\']+)["\']', body)
+                run_urls = re.findall(r'["\'/](run/[^"\'<>\s]+)["\']', body)
+                ajax_urls = re.findall(r'url\s*[:=]\s*["\']([^"\']+)["\']', body)
+                return {
+                    'statusCode': 200,
+                    'headers': {**CORS, 'Content-Type': 'application/json'},
+                    'body': json.dumps({
+                        'js_len': len(body),
+                        'fetch_calls': fetch_calls[:30],
+                        'xhr_open': xhr_open[:30],
+                        'run_urls': run_urls[:30],
+                        'ajax_urls': ajax_urls[:30],
+                        'cab_snippet': body[body.find('cab'):body.find('cab')+500] if 'cab' in body else 'not found',
+                        'data_snippet': body[body.find('data'):body.find('data')+500] if 'data' in body else 'not found',
+                    }, ensure_ascii=False)
+                }
+            except Exception as e:
+                return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'error': str(e)})}
+
+        if action == 'debug_psytests':
+            try:
+                opener = psytests_login()
+                # Получаем полный HTML cabdata и ищем все fetch/XHR вызовы
+                req = urllib.request.Request('https://psytests.org/cabdata.html', headers={
+                    'User-Agent': 'Mozilla/5.0',
+                })
+                with opener.open(req, timeout=15) as r:
+                    body = r.read().decode('windows-1251', errors='replace')
+
+                # Ищем все URL в JS
+                urls_in_js = re.findall(r'["\']([/][a-zA-Z0-9/_\-\.?=&]+)["\']', body)
+                fetch_calls = re.findall(r'fetch\(["\']([^"\']+)["\']', body)
+                xhr_calls = re.findall(r'\.open\(["\'][A-Z]+["\'],\s*["\']([^"\']+)["\']', body)
+                run_urls = [u for u in urls_in_js if '/run/' in u or '/api/' in u or 'data' in u.lower()]
+
+                # Также пробуем прямой запрос к /run/ с параметрами
+                api_results = {}
+                for test_url in [
+                    'https://psytests.org/run/cabget',
+                    'https://psytests.org/run/cabjson',
+                    'https://psytests.org/run/cablist',
+                    'https://psytests.org/run/cab',
+                ]:
+                    try:
+                        req2 = urllib.request.Request(test_url, headers={'User-Agent': 'Mozilla/5.0', 'X-Requested-With': 'XMLHttpRequest'})
+                        with opener.open(req2, timeout=5) as r2:
+                            t = r2.read().decode('utf-8', errors='replace')
+                            api_results[test_url] = t[:200]
+                    except urllib.error.HTTPError as e:
+                        api_results[test_url] = f'HTTP {e.code}'
+                    except Exception as e:
+                        api_results[test_url] = str(e)
+
+                return {
+                    'statusCode': 200,
+                    'headers': {**CORS, 'Content-Type': 'application/json'},
+                    'body': json.dumps({
+                        'html_len': len(body),
+                        'full_html': body,
+                        'urls_in_js': urls_in_js[:50],
+                        'fetch_calls': fetch_calls,
+                        'xhr_calls': xhr_calls,
+                        'run_urls': run_urls,
+                        'api_results': api_results,
+                    }, ensure_ascii=False)
                 }
             except Exception as e:
                 return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'error': str(e)})}
