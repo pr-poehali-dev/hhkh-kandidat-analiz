@@ -89,8 +89,8 @@ export function useHHResponses(): UseHHResponsesResult {
       const employerId = (me.employer as Record<string, unknown>)?.id as string || '';
       const managerId = (me.manager as Record<string, unknown>)?.id as string || '';
 
-      // Шаг 1: вакансии работодателя
-      const vacUrl = `${HH_RESPONSES_URL}?resource=vacancies&employer_id=${employerId}&manager_id=${managerId}`;
+      // Шаг 1: вакансии работодателя через публичный поиск по employer_id
+      const vacUrl = `${HH_RESPONSES_URL}?resource=vacancies&employer_id=${employerId}`;
       const vacData = await fetchWithToken(vacUrl);
       const vacancies: Record<string, unknown>[] = (vacData.items as Record<string, unknown>[]) || [];
 
