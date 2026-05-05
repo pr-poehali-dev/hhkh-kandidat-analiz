@@ -2,10 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Candidate, CandidateStatus } from '@/data/mockData';
 
 const CANDIDATES_API = 'https://functions.poehali.dev/b9c994a9-3c28-4006-b96c-ddcd619b381d';
-const HH_SYNC_URL = 'https://functions.poehali.dev/51035958-9246-42fd-8726-99f107a6cea7';
 const HH_RESPONSES_URL = 'https://functions.poehali.dev/2a41e2d1-38ab-4c9b-aa98-6800a8333690';
 const HH_AUTH_URL = 'https://functions.poehali.dev/9500c236-1e3e-4291-99b9-5610c7718359';
-const MAIL_MONITOR_URL = 'https://functions.poehali.dev/dcb327ec-8acb-41ce-91ba-9b309d581902';
 
 
 async function tryRefreshToken(): Promise<string | null> {
@@ -161,7 +159,7 @@ export function useCandidates(): UseCandidatesResult {
           try {
             // Бэкенд сам тянет данные с HH.ru и сохраняет в БД
             setSyncStatus(s => ({ ...s, progress: `"${vacName}" → ${colId}...` }));
-            await fetch(HH_SYNC_URL, {
+            await fetch(HH_RESPONSES_URL, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'X-HH-Token': currentToken! },
               body: JSON.stringify({ vacancy_id: vacId, vacancy_name: vacName, col_id: colId }),
@@ -174,7 +172,7 @@ export function useCandidates(): UseCandidatesResult {
 
       // Проверяем почту — переводим ответивших кандидатов на тестирование
       setSyncStatus(s => ({ ...s, progress: 'Проверяю почту...' }));
-      try { await fetch(MAIL_MONITOR_URL); } catch { /* игнорируем */ }
+      try { await fetch(`${CANDIDATES_API}?action=check_mail`); } catch { /* игнорируем */ }
 
       const now = new Date().toLocaleString('ru');
       localStorage.setItem('hh_last_sync', now);
