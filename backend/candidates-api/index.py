@@ -87,10 +87,14 @@ def handler(event: dict, context) -> dict:
                     }
 
                 elif action == 'vacancy_stats':
+                    # Группируем по vacancy_name — один vacancy_id может быть пустым у старых записей
                     cur.execute(f'''
-                        SELECT vacancy_id, vacancy_name, COUNT(*) as total
+                        SELECT
+                            COALESCE(MAX(NULLIF(vacancy_id, '')), '') as vacancy_id,
+                            vacancy_name,
+                            COUNT(*) as total
                         FROM {SCHEMA}.applications
-                        GROUP BY vacancy_id, vacancy_name
+                        GROUP BY vacancy_name
                         ORDER BY total DESC
                     ''')
                     rows = cur.fetchall()
