@@ -43,6 +43,7 @@ def extract_negotiation_id(text):
     """Извлекаем ID переписки из ссылки в письме HH.ru"""
     # Ищем topic_id в URL письма
     patterns = [
+        r'chat_id=(\d+)',
         r'topic_id=(\d+)',
         r'negotiations/(\d+)',
         r't=(\d+)',
