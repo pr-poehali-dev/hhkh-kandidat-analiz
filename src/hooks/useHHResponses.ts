@@ -156,7 +156,7 @@ export function useHHResponses(): UseHHResponsesResult {
         return;
       }
 
-      // Шаг 2: отклики по каждой вакансии
+      // Шаг 2: для каждой вакансии — получаем список коллекций, потом грузим каждую отдельно
       const all: Candidate[] = [];
       let accessDenied = 0;
       const vacancyCountMap: Record<string, number> = {};
@@ -164,11 +164,33 @@ export function useHHResponses(): UseHHResponsesResult {
       for (const vac of rawVacancies) {
         const vacId = vac.id as string;
         const vacName = (vac.name as string) || 'Не указано';
+        const vacItems: Candidate[] = [];
+
         try {
-          const negData = await fetchWithToken(`${HH_RESPONSES_URL}?resource=negotiations&vacancy_id=${vacId}`);
-          const items: Record<string, unknown>[] = negData.items || [];
-          vacancyCountMap[vacId] = items.length;
-          all.push(...items.map((item, i) => mapHHNegotiation(item, i, vacName)));
+          // Получаем список статусов
+          const statesData = await fetchWithToken(`${HH_RESPONSES_URL}?resource=negotiations_states&vacancy_id=${vacId}`);
+          const states: string[] = statesData.states || [];
+
+          // Грузим каждую коллекцию отдельным запросом
+          for (const colId of states) {
+            try {
+              const negData = await fetchWithToken(`${HH_RESPONSES_URL}?resource=negotiations&vacancy_id=${vacId}&col_id=${colId}`);
+              const items: Record<string, unknown>[] = negData.items || [];
+              vacItems.push(...items.map((item, i) => mapHHNegotiation(item, i, vacName)));
+            } catch {
+              // коллекция недоступна — пропускаем
+            }
+          }
+
+          // Дедупликация по ID отклика внутри вакансии
+          const seenIds = new Set<string>();
+          for (const c of vacItems) {
+            if (!seenIds.has(c.id)) {
+              seenIds.add(c.id);
+              all.push(c);
+            }
+          }
+          vacancyCountMap[vacId] = seenIds.size;
         } catch (e) {
           if (e instanceof Error && e.message.includes('403')) accessDenied++;
           vacancyCountMap[vacId] = 0;

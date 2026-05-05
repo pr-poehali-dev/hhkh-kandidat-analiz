@@ -107,49 +107,34 @@ def handler(event: dict, context) -> dict:
         employer_id = params.get('employer_id', '')
         url = f'https://api.hh.ru/vacancies?employer_id={employer_id}&per_page=50' if employer_id else 'https://api.hh.ru/vacancies/mine?per_page=50'
 
-    elif resource == 'negotiations':
+    elif resource == 'negotiations_states':
+        # Возвращает список доступных коллекций (статусов) для вакансии
         vacancy_id = params.get('vacancy_id', '')
         if not vacancy_id:
-            return {
-                'statusCode': 400,
-                'headers': {**CORS, 'Content-Type': 'application/json'},
-                'body': json.dumps({'error': 'vacancy_id is required'}),
-            }
-
-        # Получаем список статусов
+            return {'statusCode': 400, 'headers': {**CORS}, 'body': json.dumps({'error': 'vacancy_id required'})}
         try:
-            col_data = fetch_json(
-                f'https://api.hh.ru/negotiations?vacancy_id={vacancy_id}&per_page=1',
-                hh_headers
-            )
+            col_data = fetch_json(f'https://api.hh.ru/negotiations?vacancy_id={vacancy_id}&per_page=1', hh_headers)
         except urllib.error.HTTPError as e:
-            error_body = e.read().decode('utf-8', errors='ignore')
-            return {
-                'statusCode': e.code,
-                'headers': {**CORS, 'Content-Type': 'application/json'},
-                'body': json.dumps({'error': f'HH.ru error {e.code}', 'details': error_body}),
-            }
-
-        employer_states = col_data.get('employer_states', [])
-        state_ids = [s['id'] for s in employer_states if s.get('id')]
-
-        # Загружаем коллекции последовательно — стабильно и без потерь
-        # Дедупликация по ID отклика (один человек = один отклик на вакансию)
-        seen_ids = set()
-        all_items = []
-
-        for col_id in state_ids:
-            items = fetch_collection(col_id, vacancy_id, hh_headers)
-            for item in items:
-                item_id = item.get('id')
-                if item_id and item_id not in seen_ids:
-                    seen_ids.add(item_id)
-                    all_items.append(item)
-
+            return {'statusCode': e.code, 'headers': {**CORS}, 'body': json.dumps({'error': f'HH.ru {e.code}'})}
+        states = [s['id'] for s in col_data.get('employer_states', []) if s.get('id')]
         return {
             'statusCode': 200,
             'headers': {**CORS, 'Content-Type': 'application/json'},
-            'body': json.dumps({'items': all_items, 'found': len(all_items)}),
+            'body': json.dumps({'states': states}),
+        }
+
+    elif resource == 'negotiations':
+        # Загружает одну коллекцию (col_id) для вакансии
+        vacancy_id = params.get('vacancy_id', '')
+        col_id = params.get('col_id', '')
+        if not vacancy_id or not col_id:
+            return {'statusCode': 400, 'headers': {**CORS}, 'body': json.dumps({'error': 'vacancy_id and col_id required'})}
+
+        items = fetch_collection(col_id, vacancy_id, hh_headers)
+        return {
+            'statusCode': 200,
+            'headers': {**CORS, 'Content-Type': 'application/json'},
+            'body': json.dumps({'items': items, 'found': len(items)}),
         }
 
     elif resource == 'debug_col':
