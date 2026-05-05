@@ -54,6 +54,8 @@ def sync_collection(cur, token, vacancy_id, vacancy_name, col_id):
             resume = item.get('resume') or {}
             salary = resume.get('salary') or {}
             exp = resume.get('total_experience') or {}
+
+            # Контакты из краткого резюме (обычно пустые)
             contacts = resume.get('contact') or []
             phone = ''
             for c in contacts:
@@ -61,6 +63,20 @@ def sync_collection(cur, token, vacancy_id, vacancy_name, col_id):
                     val = c.get('value')
                     phone = val.get('formatted', '') if isinstance(val, dict) else str(val or '')
                     break
+
+            # Если телефон не пришёл — запрашиваем детальный отклик
+            if not phone:
+                neg_id_tmp = str(item.get('id', ''))
+                try:
+                    neg_detail = hh_get(f'https://api.hh.ru/negotiations/{neg_id_tmp}', token)
+                    detail_resume = neg_detail.get('resume') or {}
+                    for c in (detail_resume.get('contact') or []):
+                        if isinstance(c, dict) and c.get('type') == 'cell':
+                            val = c.get('value')
+                            phone = val.get('formatted', '') if isinstance(val, dict) else str(val or '')
+                            break
+                except Exception:
+                    pass
 
             resume_id = resume.get('id') or str(item.get('id', ''))
 
