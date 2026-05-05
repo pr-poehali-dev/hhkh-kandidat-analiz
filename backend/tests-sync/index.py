@@ -403,13 +403,14 @@ BENNETT_FACTORS = ['score']
 
 
 def parse_psytests_csv(raw_bytes):
-    """Парсит CSV файл с psytests.org (windows-1251 или utf-8)"""
-    for encoding in ('windows-1251', 'utf-8', 'utf-8-sig'):
+    """Парсит CSV файл с psytests.org"""
+    text = None
+    for encoding in ('utf-8', 'windows-1251', 'utf-8-sig', 'latin-1'):
         try:
             text = raw_bytes.decode(encoding)
             break
         except Exception:
-            text = None
+            continue
     if not text:
         return []
 
@@ -575,15 +576,28 @@ def handler(event: dict, context) -> dict:
 
         if action == 'upload_csv':
             body_raw = event.get('body') or ''
-            # Фронтенд отправляет base64 строку
-            try:
-                csv_bytes = base64.b64decode(body_raw)
-            except Exception:
-                csv_bytes = body_raw.encode('utf-8')
+            if event.get('isBase64Encoded'):
+                raw = base64.b64decode(body_raw)
+            else:
+                raw = body_raw.encode('utf-8') if isinstance(body_raw, str) else body_raw
+            # Пробуем декодировать как windows-1251 (psytests экспортирует в нём)
+            for enc in ('windows-1251', 'utf-8-sig', 'utf-8'):
+                try:
+                    csv_bytes = raw.decode(enc).encode('utf-8')
+                    break
+                except Exception:
+                    csv_bytes = raw
 
+            # Диагностика
+            debug_info = {
+                'body_len': len(body_raw),
+                'is_base64': event.get('isBase64Encoded'),
+                'bytes_len': len(csv_bytes),
+                'bytes_start': repr(csv_bytes[:100]),
+            }
             rows = parse_psytests_csv(csv_bytes)
             if not rows:
-                return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Не удалось распарсить CSV. Проверь формат файла.'})}
+                return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Не удалось распарсить CSV. Проверь формат файла.', 'debug': debug_info})}
 
             imported, skipped = import_psytests_csv(conn, rows)
             return {
