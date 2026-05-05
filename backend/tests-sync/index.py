@@ -406,18 +406,24 @@ BENNETT_FACTORS = ['score']
 def parse_psytests_csv(raw_bytes):
     """Парсит CSV файл с psytests.org"""
     text = None
-    for encoding in ('utf-8', 'windows-1251', 'utf-8-sig', 'latin-1'):
+    used_enc = None
+    for encoding in ('windows-1251', 'utf-8-sig', 'utf-8', 'latin-1'):
         try:
             text = raw_bytes.decode(encoding)
+            used_enc = encoding
             break
         except Exception:
             continue
     if not text:
+        print(f'PARSE_FAIL: could not decode {len(raw_bytes)} bytes')
         return []
+
+    print(f'PARSE: decoded {len(raw_bytes)} bytes as {used_enc}, first 200: {repr(text[:200])}')
 
     reader = csv.reader(io.StringIO(text))
     results = []
     for row in reader:
+        print(f'ROW len={len(row)}: {row[:3]}')
         if len(row) < 4:
             continue
         test_name = row[0].strip()
