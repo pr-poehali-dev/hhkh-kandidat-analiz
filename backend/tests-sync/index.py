@@ -418,12 +418,17 @@ def parse_psytests_csv(raw_bytes):
         print(f'PARSE_FAIL: could not decode {len(raw_bytes)} bytes')
         return []
 
-    print(f'PARSE: decoded {len(raw_bytes)} bytes as {used_enc}, first 200: {repr(text[:200])}')
+    print(f'PARSE: decoded {len(raw_bytes)} bytes as {used_enc}, first 300 chars: {repr(text[:300])}')
 
-    reader = csv.reader(io.StringIO(text))
+    # Определяем разделитель
+    first_line = text.split('\n')[0]
+    delimiter = ';' if first_line.count(';') > first_line.count(',') else ','
+    print(f'PARSE: delimiter={repr(delimiter)}, first_line={repr(first_line[:150])}')
+
+    reader = csv.reader(io.StringIO(text), delimiter=delimiter)
     results = []
     for row in reader:
-        print(f'ROW len={len(row)}: {row[:3]}')
+        print(f'ROW len={len(row)}: {[r[:30] for r in row[:4]]}')
         if len(row) < 4:
             continue
         test_name = row[0].strip()
@@ -583,9 +588,17 @@ def handler(event: dict, context) -> dict:
 
         if action == 'upload_csv':
             body_raw = event.get('body') or ''
-            # Фронтенд всегда шлёт base64 бинарных байт файла
             try:
-                csv_bytes = base64.b64decode(body_raw)
+                first_decode = base64.b64decode(body_raw)
+                # Проверяем — если результат снова выглядит как base64 (только ASCII), декодируем ещё раз
+                try:
+                    first_str = first_decode.decode('ascii')
+                    if all(c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=\n\r' for c in first_str.strip()):
+                        csv_bytes = base64.b64decode(first_str.strip())
+                    else:
+                        csv_bytes = first_decode
+                except Exception:
+                    csv_bytes = first_decode
             except Exception:
                 csv_bytes = body_raw.encode('utf-8')
 
