@@ -49,11 +49,15 @@ def handler(event: dict, context) -> dict:
     if resource == 'vacancies':
         url = 'https://api.hh.ru/vacancies/mine?per_page=50'
     elif resource == 'negotiations':
-        # Для работодателя отклики — /negotiations/employer
+        # Отклики работодателя — требуется vacancy_id
         vacancy_id = params.get('vacancy_id', '')
-        url = 'https://api.hh.ru/negotiations/employer?per_page=50'
-        if vacancy_id:
-            url += f'&vacancy_id={vacancy_id}'
+        if not vacancy_id:
+            return {
+                'statusCode': 400,
+                'headers': {**CORS, 'Content-Type': 'application/json'},
+                'body': json.dumps({'error': 'vacancy_id is required for negotiations'}),
+            }
+        url = f'https://api.hh.ru/negotiations?vacancy_id={vacancy_id}&per_page=50'
     elif resource == 'me':
         url = 'https://api.hh.ru/me'
     else:

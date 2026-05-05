@@ -3,7 +3,6 @@ import { Candidate, CandidateStatus } from '@/data/mockData';
 
 const HH_RESPONSES_URL = 'https://functions.poehali.dev/2a41e2d1-38ab-4c9b-aa98-6800a8333690';
 
-// Маппинг статусов HH.ru -> внутренние статусы
 const mapHHStatus = (state: string): CandidateStatus => {
   switch (state) {
     case 'response': return 'new';
@@ -24,8 +23,9 @@ const mapHHNegotiation = (item: Record<string, unknown>, index: number): Candida
   const experience = (resume.total_experience as Record<string, unknown>) || {};
   const contacts = (resume.contact as unknown[]) || [];
 
-  const fullName = `${(applicant.last_name as string) || ''} ${(applicant.first_name as string) || ''}`.trim() || 'Кандидат';
-  const phone = (contacts.find((c) => (c as Record<string,unknown>).type === 'cell') as Record<string, unknown> | undefined)?.value as string || '';
+  const fullName = `${(applicant.last_name as string) || ''} ${(applicant.first_name as string) || ''}`.trim()
+    || (resume.first_name as string) || 'Кандидат';
+  const phone = (contacts.find((c) => (c as Record<string, unknown>).type === 'cell') as Record<string, unknown> | undefined)?.value as string || '';
   const email = (applicant.email as string) || '';
   const salaryValue = salary.amount ? `${Number(salary.amount).toLocaleString('ru')}` : '—';
   const expMonths = (experience.months as number) || 0;
@@ -69,31 +69,56 @@ export function useHHResponses(): UseHHResponsesResult {
   const token = localStorage.getItem('hh_access_token');
   const connected = Boolean(token);
 
+  const fetchWithToken = useCallback(async (url: string) => {
+    const res = await fetch(url, { headers: { 'X-HH-Token': token! } });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `Ошибка HH.ru: ${res.status}`);
+    }
+    return res.json();
+  }, [token]);
+
   const fetchResponses = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${HH_RESPONSES_URL}?resource=negotiations`, {
-        headers: { 'X-HH-Token': token },
-      });
-      if (!res.ok) {
-        if (res.status === 403 || res.status === 401) {
-          setError('Токен HH.ru устарел — переподключите аккаунт в Настройках');
-        } else {
-          setError(`Ошибка HH.ru: ${res.status}`);
-        }
+      // Шаг 1: вакансии работодателя
+      const vacData = await fetchWithToken(`${HH_RESPONSES_URL}?resource=vacancies`);
+      const vacancies: Record<string, unknown>[] = vacData.items || [];
+
+      if (vacancies.length === 0) {
+        setCandidates([]);
         return;
       }
-      const data = await res.json();
-      const items: Record<string, unknown>[] = data.items || [];
-      setCandidates(items.map((item, i) => mapHHNegotiation(item, i)));
-    } catch {
-      setError('Не удалось загрузить отклики с HH.ru');
+
+      // Шаг 2: отклики по каждой вакансии
+      const all: Candidate[] = [];
+      for (const vac of vacancies) {
+        const vacId = vac.id as string;
+        try {
+          const negData = await fetchWithToken(`${HH_RESPONSES_URL}?resource=negotiations&vacancy_id=${vacId}`);
+          const items: Record<string, unknown>[] = negData.items || [];
+          all.push(...items.map((item, i) => mapHHNegotiation(item, i)));
+        } catch {
+          // нет доступа к откликам по вакансии — пропускаем
+        }
+      }
+      setCandidates(all);
+    } catch (e) {
+      if (e instanceof Error) {
+        if (e.message.includes('403')) {
+          setError('Для загрузки откликов требуется платный доступ к API HH.ru');
+        } else if (e.message.includes('401')) {
+          setError('Токен HH.ru устарел — переподключите аккаунт в Настройках');
+        } else {
+          setError(e.message);
+        }
+      }
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, fetchWithToken]);
 
   useEffect(() => {
     if (connected) fetchResponses();
