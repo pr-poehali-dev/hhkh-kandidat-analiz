@@ -21,14 +21,16 @@ const nav = [
 export default function Index() {
   const [section, setSection] = useState<Section>('dashboard');
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
+  const [prevSection, setPrevSection] = useState<Section>('responses');
 
-  const handleSelectCandidate = (id: string) => {
+  const handleSelectCandidate = (id: string, from: Section = 'responses') => {
+    setPrevSection(from);
     setSelectedCandidateId(id);
     setSection('card');
   };
 
   const handleBack = () => {
-    setSection('responses');
+    setSection(prevSection);
     setSelectedCandidateId(null);
   };
 
@@ -135,8 +137,8 @@ export default function Index() {
 
         {/* Content */}
         <main className="flex-1 overflow-auto p-3">
-          {section === 'dashboard' && <Dashboard />}
-          {section === 'responses' && <Responses onSelectCandidate={handleSelectCandidate} />}
+          {section === 'dashboard' && <Dashboard onSelectCandidate={(id) => handleSelectCandidate(id, 'dashboard')} />}
+          {section === 'responses' && <Responses onSelectCandidate={(id) => handleSelectCandidate(id, 'responses')} />}
           {section === 'card' && selectedCandidateId && (
             <CandidateCard candidateId={selectedCandidateId} onBack={handleBack} />
           )}

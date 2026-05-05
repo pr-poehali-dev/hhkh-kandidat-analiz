@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useCandidates } from '@/hooks/useCandidates';
 import { historyLogs, statusLabels, CandidateStatus } from '@/data/mockData';
 import Icon from '@/components/ui/icon';
@@ -13,8 +14,9 @@ const funnelStages: { status: CandidateStatus; color: string }[] = [
   { status: 'reject', color: 'bg-red-500' },
 ];
 
-export default function Dashboard() {
+export default function Dashboard({ onSelectCandidate }: { onSelectCandidate?: (id: string) => void }) {
   const { candidates, vacancies, loading } = useCandidates();
+  const [checkExpanded, setCheckExpanded] = useState(true);
 
   const statusCounts = candidates.reduce((acc, c) => {
     acc[c.status] = (acc[c.status] || 0) + 1;
@@ -148,33 +150,45 @@ export default function Dashboard() {
       {/* Needs Check */}
       {needsCheck.length > 0 && (
         <div className="panel border-orange-500/40">
-          <div className="panel-header bg-orange-500/5">
+          <button
+            className="panel-header bg-orange-500/5 w-full text-left"
+            onClick={() => setCheckExpanded(v => !v)}
+          >
             <div className="flex items-center gap-2">
               <Icon name="AlertCircle" size={13} className="text-orange-400" />
               <span className="text-xs font-semibold text-orange-400 uppercase tracking-wider">Необходима проверка результатов</span>
             </div>
-            <span className="text-xs font-mono-data text-orange-400">{needsCheck.length} кандидатов</span>
-          </div>
-          <table className="w-full data-table">
-            <thead>
-              <tr>
-                <th>Имя</th>
-                <th>Позиция</th>
-                <th>Город</th>
-                <th>Обновлён</th>
-              </tr>
-            </thead>
-            <tbody>
-              {needsCheck.map((c) => (
-                <tr key={c.id}>
-                  <td className="font-medium text-foreground">{c.name}</td>
-                  <td className="text-muted-foreground">{c.position}</td>
-                  <td className="text-muted-foreground">{c.city}</td>
-                  <td className="text-muted-foreground font-mono-data">{c.updatedAt}</td>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono-data text-orange-400">{needsCheck.length} кандидатов</span>
+              <Icon name={checkExpanded ? 'ChevronUp' : 'ChevronDown'} size={13} className="text-orange-400" />
+            </div>
+          </button>
+          {checkExpanded && (
+            <table className="w-full data-table">
+              <thead>
+                <tr>
+                  <th>Имя</th>
+                  <th>Позиция</th>
+                  <th>Город</th>
+                  <th>Обновлён</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {needsCheck.map((c) => (
+                  <tr
+                    key={c.id}
+                    className="cursor-pointer hover:bg-orange-500/5"
+                    onClick={() => onSelectCandidate?.(c.id)}
+                  >
+                    <td className="font-medium text-foreground">{c.name}</td>
+                    <td className="text-muted-foreground">{c.position}</td>
+                    <td className="text-muted-foreground">{c.city}</td>
+                    <td className="text-muted-foreground font-mono-data">{c.updatedAt}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 
