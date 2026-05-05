@@ -588,19 +588,11 @@ def handler(event: dict, context) -> dict:
 
         if action == 'upload_csv':
             body_raw = event.get('body') or ''
-            try:
-                first_decode = base64.b64decode(body_raw)
-                # Проверяем — если результат снова выглядит как base64 (только ASCII), декодируем ещё раз
-                try:
-                    first_str = first_decode.decode('ascii')
-                    if all(c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=\n\r' for c in first_str.strip()):
-                        csv_bytes = base64.b64decode(first_str.strip())
-                    else:
-                        csv_bytes = first_decode
-                except Exception:
-                    csv_bytes = first_decode
-            except Exception:
+            # Фронтенд читает файл как windows-1251 и шлёт UTF-8 текст
+            if isinstance(body_raw, str):
                 csv_bytes = body_raw.encode('utf-8')
+            else:
+                csv_bytes = body_raw
 
             # Диагностика
             debug_info = {

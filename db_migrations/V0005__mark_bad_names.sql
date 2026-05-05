@@ -1,0 +1,1 @@
+UPDATE t_p93338434_hhkh_kandidat_analiz.test_results SET result_data = NULL WHERE result_data->>'psytests_name' LIKE '%?%' OR result_data::text LIKE '%\u0420%';

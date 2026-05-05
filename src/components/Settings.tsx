@@ -17,19 +17,17 @@ function PsytestsImport() {
     setErrorMsg('');
     setResult(null);
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
+      // Читаем как windows-1251, отправляем текст напрямую
+      const text = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          resolve(result.split(',')[1]);
-        };
+        reader.onload = () => resolve(reader.result as string);
         reader.onerror = reject;
-        reader.readAsDataURL(file);
+        reader.readAsText(file, 'windows-1251');
       });
       const res = await fetch(`${TESTS_SYNC_URL}?action=upload_csv`, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: base64,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        body: text,
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error + (data.debug ? ' | ' + JSON.stringify(data.debug) : '') || 'Ошибка загрузки');
