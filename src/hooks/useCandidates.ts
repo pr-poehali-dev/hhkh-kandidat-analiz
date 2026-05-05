@@ -97,17 +97,18 @@ export function useCandidates(): UseCandidatesResult {
       const rows: Record<string, unknown>[] = data.items || [];
       setCandidates(rows.map(mapDbRow));
 
-      // Статистика по вакансиям
-      const vacMap: Record<string, HHVacancy> = {};
-      for (const row of rows) {
-        const vid = row.vacancy_id as string;
-        if (!vid) continue;
-        if (!vacMap[vid]) {
-          vacMap[vid] = { id: vid, name: (row.vacancy_name as string) || '', area: '', publishedAt: '', candidatesCount: 0 };
-        }
-        vacMap[vid].candidatesCount++;
+      // Статистика по вакансиям из отдельного запроса
+      const statsRes = await fetch(`${CANDIDATES_API}?action=vacancy_stats`);
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        setVacancies((statsData.items || []).map((v: Record<string, unknown>) => ({
+          id: v.vacancy_id as string,
+          name: (v.vacancy_name as string) || '',
+          area: '',
+          publishedAt: '',
+          candidatesCount: Number(v.total) || 0,
+        })));
       }
-      setVacancies(Object.values(vacMap));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка загрузки');
     } finally {

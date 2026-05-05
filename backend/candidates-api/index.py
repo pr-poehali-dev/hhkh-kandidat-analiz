@@ -86,6 +86,20 @@ def handler(event: dict, context) -> dict:
                         'body': json.dumps({'items': [dict(r) for r in rows], 'total': len(rows)}, default=str),
                     }
 
+                elif action == 'vacancy_stats':
+                    cur.execute(f'''
+                        SELECT vacancy_id, vacancy_name, COUNT(*) as total
+                        FROM {SCHEMA}.applications
+                        GROUP BY vacancy_id, vacancy_name
+                        ORDER BY total DESC
+                    ''')
+                    rows = cur.fetchall()
+                    return {
+                        'statusCode': 200,
+                        'headers': {**CORS, 'Content-Type': 'application/json'},
+                        'body': json.dumps({'items': [dict(r) for r in rows]}, default=str),
+                    }
+
                 elif action == 'stats':
                     # Статистика для дашборда
                     cur.execute(f'''
