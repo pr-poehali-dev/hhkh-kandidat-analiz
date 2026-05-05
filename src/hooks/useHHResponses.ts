@@ -83,10 +83,16 @@ export function useHHResponses(): UseHHResponsesResult {
     setLoading(true);
     setError(null);
     try {
+      // Шаг 0: получаем employer_id и manager_id из профиля
+      const me = await fetchWithToken(`${HH_RESPONSES_URL}?resource=me`);
+      const employerId = (me.employer as Record<string, unknown>)?.id as string || '';
+      const managerId = (me.manager as Record<string, unknown>)?.id as string || '';
+
       // Шаг 1: вакансии работодателя
       let vacData: Record<string, unknown> = {};
       try {
-        vacData = await fetchWithToken(`${HH_RESPONSES_URL}?resource=vacancies`);
+        const vacUrl = `${HH_RESPONSES_URL}?resource=vacancies&employer_id=${employerId}&manager_id=${managerId}`;
+        vacData = await fetchWithToken(vacUrl);
       } catch (e) {
         if (e instanceof Error && e.message.includes('404')) {
           setCandidates([]);
