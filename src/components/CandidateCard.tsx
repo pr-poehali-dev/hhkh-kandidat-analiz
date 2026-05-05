@@ -1,10 +1,73 @@
 import { useCandidates } from '@/hooks/useCandidates';
 import StatusBadge from '@/components/StatusBadge';
 import Icon from '@/components/ui/icon';
+import { useEffect, useState } from 'react';
+
+const TESTS_SYNC_URL = 'https://functions.poehali.dev/f02fbdeb-8e4c-41b9-bbbc-619f2b6dbc83';
+
+interface TestResult {
+  test_type: string;
+  source_name: string;
+  raw_score: string;
+  result_data: Record<string, string>;
+  created_at: string;
+}
+
+interface FormResponse {
+  vacancy_name: string;
+  respondent_name: string;
+  submitted_at: string;
+  form_data: Record<string, string>;
+  spreadsheet_id: string;
+  created_at: string;
+}
+
+const TEST_TYPE_LABELS: Record<string, string> = {
+  kettell: 'Тест Кеттела 16PF',
+  bennett: 'Тест Беннета (мех. понятливость)',
+  other: 'Психологический тест',
+};
+
+function useTestResults(candidateId: string) {
+  const [tests, setTests] = useState<TestResult[]>([]);
+  const [forms, setForms] = useState<FormResponse[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  const load = async () => {
+    const numericId = candidateId.replace('app-', '');
+    setLoading(true);
+    try {
+      const res = await fetch(`${TESTS_SYNC_URL}?action=get&candidate_id=${numericId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setTests(data.tests || []);
+        setForms(data.forms || []);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sync = async () => {
+    setSyncing(true);
+    try {
+      await fetch(`${TESTS_SYNC_URL}?action=sync`);
+      await load();
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  useEffect(() => { load(); }, [candidateId]);
+
+  return { tests, forms, loading, syncing, sync };
+}
 
 export default function CandidateCard({ candidateId, onBack }: { candidateId: string; onBack: () => void }) {
   const { candidates } = useCandidates();
-  const c = candidates.find((x) => x.id === candidateId) as typeof candidates[0] & { hhResumeId?: string; hhNegotiationId?: string };
+  const c = candidates.find((x) => x.id === candidateId) as typeof candidates[0] & { hhResumeId?: string; hhNegotiationId?: string; applicationId?: number };
+  const { tests, forms, loading: testsLoading, syncing, sync } = useTestResults(candidateId);
   if (!c) return null;
 
   const resumeUrl = c.hhResumeId
@@ -133,24 +196,88 @@ export default function CandidateCard({ candidateId, onBack }: { candidateId: st
           </div>
         </div>
 
-        {/* Right: Test + Status */}
+        {/* Right: Tests */}
         <div className="col-span-3 flex flex-col gap-3">
+          {/* Google Forms */}
           <div className="panel">
             <div className="panel-header">
-              <span className="text-xs font-semibold text-foreground uppercase tracking-wider">Результат теста</span>
+              <span className="text-xs font-semibold text-foreground uppercase tracking-wider">Анкета</span>
+              <button
+                onClick={sync}
+                disabled={syncing}
+                className="text-xs text-primary hover:underline flex items-center gap-1 disabled:opacity-50"
+              >
+                <Icon name="RefreshCw" size={11} className={syncing ? 'animate-spin' : ''} />
+                {syncing ? 'Синхр...' : 'Обновить'}
+              </button>
             </div>
-            <div className="p-4 text-center text-xs text-muted-foreground">
-              Тест не отправлен
-            </div>
+            {testsLoading ? (
+              <div className="p-4 text-center text-xs text-muted-foreground">Загрузка...</div>
+            ) : forms.length === 0 ? (
+              <div className="p-4 text-center text-xs text-muted-foreground">Анкета не заполнена</div>
+            ) : (
+              <div className="p-3 flex flex-col gap-3">
+                {forms.map((f, i) => (
+                  <div key={i} className="flex flex-col gap-1.5 border-b border-border pb-3 last:border-0 last:pb-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-foreground">{f.vacancy_name || 'Анкета'}</span>
+                      <span className="text-xs text-muted-foreground">{f.submitted_at ? f.submitted_at.slice(0, 10) : f.created_at?.slice(0, 10)}</span>
+                    </div>
+                    {f.form_data && (
+                      <div className="flex flex-col gap-1">
+                        {Object.entries(f.form_data).slice(0, 6).map(([key, val]) => (
+                          <div key={key} className="text-xs">
+                            <span className="text-muted-foreground">{key}: </span>
+                            <span className="text-foreground">{String(val).slice(0, 60)}</span>
+                          </div>
+                        ))}
+                        {Object.keys(f.form_data).length > 6 && (
+                          <span className="text-xs text-muted-foreground">+{Object.keys(f.form_data).length - 6} полей...</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
+          {/* Psytests */}
           <div className="panel">
             <div className="panel-header">
-              <span className="text-xs font-semibold text-foreground uppercase tracking-wider">История</span>
+              <span className="text-xs font-semibold text-foreground uppercase tracking-wider">Психотесты</span>
             </div>
-            <div className="p-4 text-center text-xs text-muted-foreground">
-              История пуста
-            </div>
+            {testsLoading ? (
+              <div className="p-4 text-center text-xs text-muted-foreground">Загрузка...</div>
+            ) : tests.length === 0 ? (
+              <div className="p-4 text-center text-xs text-muted-foreground">Тесты не пройдены</div>
+            ) : (
+              <div className="p-3 flex flex-col gap-3">
+                {tests.map((t, i) => (
+                  <div key={i} className="flex flex-col gap-1 border-b border-border pb-3 last:border-0 last:pb-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-foreground">{TEST_TYPE_LABELS[t.test_type] || t.source_name}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">Результат</span>
+                      <span className="text-xs font-semibold text-foreground">{t.raw_score || '—'}</span>
+                    </div>
+                    {t.result_data?.psytests_link && (
+                      <a
+                        href={t.result_data.psytests_link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary hover:underline flex items-center gap-1 mt-0.5"
+                      >
+                        <Icon name="ExternalLink" size={10} />
+                        Полный результат
+                      </a>
+                    )}
+                    <span className="text-xs text-muted-foreground">{t.result_data?.date || t.created_at?.slice(0, 10)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

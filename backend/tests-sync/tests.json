@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "Get tests for candidate",
+      "method": "GET",
+      "path": "/?action=get&candidate_id=1",
+      "expectedStatus": 200,
+      "expectedBody": {"tests": [], "forms": []},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
