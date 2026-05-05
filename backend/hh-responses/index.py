@@ -49,8 +49,9 @@ def handler(event: dict, context) -> dict:
     if resource == 'vacancies':
         url = 'https://api.hh.ru/vacancies/mine?per_page=50'
     elif resource == 'negotiations':
+        # Для работодателя отклики — /negotiations/employer
         vacancy_id = params.get('vacancy_id', '')
-        url = f'https://api.hh.ru/negotiations?per_page=50&status=active'
+        url = 'https://api.hh.ru/negotiations/employer?per_page=50'
         if vacancy_id:
             url += f'&vacancy_id={vacancy_id}'
     elif resource == 'me':
