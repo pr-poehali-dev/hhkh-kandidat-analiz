@@ -99,7 +99,6 @@ def sync_collection(cur, token, vacancy_id, vacancy_name, col_id):
                      status, hh_status, applied_at, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (hh_negotiation_id) DO UPDATE SET
-                    status = EXCLUDED.status,
                     hh_status = EXCLUDED.hh_status,
                     updated_at = EXCLUDED.updated_at
             ''', (
