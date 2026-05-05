@@ -47,14 +47,14 @@ def handler(event: dict, context) -> dict:
     }
 
     if resource == 'vacancies':
-        # Вакансии работодателя — используем employer_id из параметров или общий список
         employer_id = params.get('employer_id', '')
         manager_id = params.get('manager_id', '')
-        url = 'https://api.hh.ru/vacancies/mine?per_page=50&status=published'
-        if employer_id:
-            url += f'&employer_id={employer_id}'
-        if manager_id:
-            url += f'&manager_id={manager_id}'
+        if employer_id and manager_id:
+            url = f'https://api.hh.ru/employers/{employer_id}/vacancies?manager_id={manager_id}&per_page=50'
+        elif employer_id:
+            url = f'https://api.hh.ru/employers/{employer_id}/vacancies?per_page=50'
+        else:
+            url = 'https://api.hh.ru/vacancies/mine?per_page=50'
     elif resource == 'negotiations':
         vacancy_id = params.get('vacancy_id', '')
         if not vacancy_id:

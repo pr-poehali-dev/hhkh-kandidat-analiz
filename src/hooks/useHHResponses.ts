@@ -73,7 +73,8 @@ export function useHHResponses(): UseHHResponsesResult {
     const res = await fetch(url, { headers: { 'X-HH-Token': token! } });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || `Ошибка HH.ru: ${res.status}`);
+      const details = data.details ? ` (${data.details})` : '';
+      throw new Error(`${data.error || `Ошибка HH.ru: ${res.status}`}${details}`);
     }
     return res.json();
   }, [token]);
@@ -89,18 +90,8 @@ export function useHHResponses(): UseHHResponsesResult {
       const managerId = (me.manager as Record<string, unknown>)?.id as string || '';
 
       // Шаг 1: вакансии работодателя
-      let vacData: Record<string, unknown> = {};
-      try {
-        const vacUrl = `${HH_RESPONSES_URL}?resource=vacancies&employer_id=${employerId}&manager_id=${managerId}`;
-        vacData = await fetchWithToken(vacUrl);
-      } catch (e) {
-        if (e instanceof Error && e.message.includes('404')) {
-          setCandidates([]);
-          setError('На HH.ru нет активных вакансий. Опубликуйте вакансию — отклики появятся здесь.');
-          return;
-        }
-        throw e;
-      }
+      const vacUrl = `${HH_RESPONSES_URL}?resource=vacancies&employer_id=${employerId}&manager_id=${managerId}`;
+      const vacData = await fetchWithToken(vacUrl);
       const vacancies: Record<string, unknown>[] = (vacData.items as Record<string, unknown>[]) || [];
 
       if (vacancies.length === 0) {
