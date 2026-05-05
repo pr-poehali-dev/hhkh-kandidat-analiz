@@ -142,6 +142,23 @@ def handler(event: dict, context) -> dict:
         col_id = params.get('col_id', 'assessment')
         page = params.get('page', '0')
         url = f'https://api.hh.ru/negotiations/{col_id}?vacancy_id={vacancy_id}&per_page=50&page={page}'
+    elif resource == 'test_action':
+        # Тест смены статуса отклика
+        negotiation_id = params.get('negotiation_id', '')
+        action = params.get('action', 'consider')
+        if not negotiation_id:
+            return {'statusCode': 400, 'headers': {**CORS}, 'body': json.dumps({'error': 'negotiation_id required'})}
+        put_url = f'https://api.hh.ru/negotiations/{action}/{negotiation_id}'
+        req_put = urllib.request.Request(put_url, data=b'', headers=hh_headers, method='PUT')
+        try:
+            with urllib.request.urlopen(req_put, timeout=10) as r:
+                body = r.read().decode('utf-8') or '{}'
+                return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json'},
+                        'body': json.dumps({'ok': True, 'response': body})}
+        except urllib.error.HTTPError as e:
+            err = e.read().decode('utf-8', errors='ignore')
+            return {'statusCode': e.code, 'headers': {**CORS, 'Content-Type': 'application/json'},
+                    'body': json.dumps({'ok': False, 'status': e.code, 'error': err})}
     elif resource == 'me':
         url = 'https://api.hh.ru/me'
     else:
