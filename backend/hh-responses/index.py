@@ -61,7 +61,7 @@ def handler(event: dict, context) -> dict:
                 'body': json.dumps({'error': 'vacancy_id is required for negotiations'}),
             }
         # Сначала получаем список коллекций, потом забираем отклики из каждой
-        collections_url = f'https://api.hh.ru/negotiations?vacancy_id={vacancy_id}&per_page=1'
+        collections_url = f'https://api.hh.ru/negotiations?vacancy_id={vacancy_id}&per_page=100'
         req_col = urllib.request.Request(collections_url, headers=hh_headers)
         try:
             with urllib.request.urlopen(req_col) as r:
@@ -75,6 +75,20 @@ def handler(event: dict, context) -> dict:
             }
 
         collections = col_data.get('collections', [])
+        direct_items = col_data.get('items', [])
+
+        # Если нет коллекций или все пустые — возвращаем items прямо из первого запроса
+        total_in_collections = sum(len(c.get('items', [])) for c in collections)
+        if direct_items and (not collections or total_in_collections == 0):
+            for item in direct_items:
+                state_id = (item.get('state') or {}).get('id', 'response')
+                item['_collection_id'] = state_id
+            return {
+                'statusCode': 200,
+                'headers': {**CORS, 'Content-Type': 'application/json'},
+                'body': json.dumps({'items': direct_items, 'found': len(direct_items)}),
+            }
+
         all_items = []
         seen_ids = set()
 
@@ -83,10 +97,8 @@ def handler(event: dict, context) -> dict:
             col_id = col.get('id', '')
             if not col_url:
                 continue
-            if col.get('hidden') and col.get('count', 0) == 0:
-                continue
+            # Не пропускаем ни одну коллекцию — загружаем всё
 
-            # Берём первые 100 из каждой коллекции (достаточно для большинства случаев)
             paged_url = f'{col_url}&per_page=100&page=0'
             req_items = urllib.request.Request(paged_url, headers=hh_headers)
             try:
@@ -107,6 +119,9 @@ def handler(event: dict, context) -> dict:
             'headers': {**CORS, 'Content-Type': 'application/json'},
             'body': json.dumps({'items': all_items, 'found': len(all_items)}),
         }
+    elif resource == 'debug_negotiations':
+        vacancy_id = params.get('vacancy_id', '')
+        url = f'https://api.hh.ru/negotiations?vacancy_id={vacancy_id}&per_page=5'
     elif resource == 'me':
         url = 'https://api.hh.ru/me'
     elif resource == 'employer':
