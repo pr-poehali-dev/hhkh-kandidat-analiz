@@ -10,6 +10,31 @@ def fetch_json(url, hh_headers):
         return json.loads(r.read())
 
 
+def slim_item(item, col_id):
+    """Оставляем только нужные поля — уменьшаем размер ответа"""
+    resume = item.get('resume') or {}
+    area = resume.get('area') or {}
+    salary = resume.get('salary') or {}
+    exp = resume.get('total_experience') or {}
+    return {
+        'id': item.get('id'),
+        '_collection_id': col_id,
+        'created_at': item.get('created_at', ''),
+        'updated_at': item.get('updated_at', ''),
+        'state': item.get('state'),
+        'vacancy': item.get('vacancy'),
+        'resume': {
+            'last_name': resume.get('last_name', ''),
+            'first_name': resume.get('first_name', ''),
+            'title': resume.get('title', ''),
+            'area': {'name': area.get('name', '')},
+            'salary': {'amount': salary.get('amount'), 'currency': salary.get('currency', 'RUR')},
+            'total_experience': {'months': exp.get('months', 0)},
+            'contact': resume.get('contact', []),
+        }
+    }
+
+
 def fetch_collection(col_id, vacancy_id, hh_headers):
     """Загружает все страницы одной коллекции"""
     items = []
@@ -21,8 +46,7 @@ def fetch_collection(col_id, vacancy_id, hh_headers):
         except Exception:
             break
         for item in data.get('items', []):
-            item['_collection_id'] = col_id
-            items.append(item)
+            items.append(slim_item(item, col_id))
         pages = data.get('pages', 1)
         page += 1
         if page >= pages:
@@ -105,7 +129,7 @@ def handler(event: dict, context) -> dict:
         all_items = []
         seen_ids = set()
 
-        with ThreadPoolExecutor(max_workers=6) as executor:
+        with ThreadPoolExecutor(max_workers=3) as executor:
             futures = {
                 executor.submit(fetch_collection, col_id, vacancy_id, hh_headers): col_id
                 for col_id in state_ids
