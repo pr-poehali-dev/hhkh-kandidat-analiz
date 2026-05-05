@@ -13,7 +13,7 @@ const funnelStages: { status: CandidateStatus; color: string }[] = [
 ];
 
 export default function Dashboard() {
-  const { candidates, vacancies, connected, loading } = useCandidates();
+  const { candidates, vacancies, loading } = useCandidates();
 
   const statusCounts = candidates.reduce((acc, c) => {
     acc[c.status] = (acc[c.status] || 0) + 1;
@@ -23,12 +23,13 @@ export default function Dashboard() {
   const recent = [...candidates].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 6);
 
   const stats = [
-    { label: 'Всего кандидатов', value: candidates.length, icon: 'Users' },
-    { label: 'Новых откликов', value: statusCounts['new'] || 0, icon: 'UserPlus' },
-    { label: 'На рассмотрении', value: statusCounts['review'] || 0, icon: 'ClipboardCheck' },
-    { label: 'Собеседований', value: statusCounts['interview'] || 0, icon: 'CalendarDays' },
-    { label: 'Офферов выдано', value: statusCounts['offer'] || 0, icon: 'Award' },
-    { label: 'Отказов', value: statusCounts['reject'] || 0, icon: 'UserX' },
+    { label: 'Всего кандидатов', value: candidates.length, icon: 'Users', color: '' },
+    { label: 'Новых откликов', value: statusCounts['new'] || 0, icon: 'UserPlus', color: 'text-blue-400' },
+    { label: 'Первичный контакт', value: statusCounts['review'] || 0, icon: 'MessageCircle', color: 'text-yellow-400' },
+    { label: 'На тестировании', value: statusCounts['test'] || 0, icon: 'ClipboardCheck', color: 'text-purple-400' },
+    { label: 'Собеседований', value: statusCounts['interview'] || 0, icon: 'CalendarDays', color: 'text-cyan-400' },
+    { label: 'Принято на работу', value: statusCounts['offer'] || 0, icon: 'CheckCircle2', color: 'text-green-400' },
+    { label: 'Отказов', value: statusCounts['reject'] || 0, icon: 'UserX', color: 'text-red-400' },
   ];
 
 
@@ -36,18 +37,18 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col gap-3 animate-fade-in">
       {/* Stats Row */}
-      <div className="grid grid-cols-6 gap-2">
+      <div className="grid grid-cols-7 gap-2">
         {stats.map((s) => (
           <div key={s.label} className="panel p-3 flex flex-col gap-1">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">{s.label}</span>
-              <Icon name={s.icon} size={13} className="text-muted-foreground" />
+              <span className="text-xs text-muted-foreground leading-tight">{s.label}</span>
+              <Icon name={s.icon} size={13} className={s.color || 'text-muted-foreground'} />
             </div>
             <div className="flex items-end gap-2">
               {loading ? (
                 <div className="h-8 w-10 bg-muted rounded animate-pulse" />
               ) : (
-                <span className="text-2xl font-semibold font-mono-data text-foreground">{s.value}</span>
+                <span className={`text-2xl font-semibold font-mono-data ${s.color || 'text-foreground'}`}>{s.value}</span>
               )}
             </div>
           </div>

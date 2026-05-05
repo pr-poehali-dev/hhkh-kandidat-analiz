@@ -46,9 +46,9 @@ export const vacancies: { id: string; title: string; department: string; openSin
 
 export const statusLabels: Record<CandidateStatus, string> = {
   new: 'Новый',
-  review: 'Рассмотрение',
-  test: 'Тест',
+  review: 'Первичный контакт',
+  test: 'Тестирование',
   interview: 'Собеседование',
-  offer: 'Оффер',
+  offer: 'Принят на работу',
   reject: 'Отказ',
 };
