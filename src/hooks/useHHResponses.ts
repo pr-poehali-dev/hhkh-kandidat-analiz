@@ -84,11 +84,22 @@ export function useHHResponses(): UseHHResponsesResult {
     setError(null);
     try {
       // Шаг 1: вакансии работодателя
-      const vacData = await fetchWithToken(`${HH_RESPONSES_URL}?resource=vacancies`);
-      const vacancies: Record<string, unknown>[] = vacData.items || [];
+      let vacData: Record<string, unknown> = {};
+      try {
+        vacData = await fetchWithToken(`${HH_RESPONSES_URL}?resource=vacancies`);
+      } catch (e) {
+        if (e instanceof Error && e.message.includes('404')) {
+          setCandidates([]);
+          setError('На HH.ru нет активных вакансий. Опубликуйте вакансию — отклики появятся здесь.');
+          return;
+        }
+        throw e;
+      }
+      const vacancies: Record<string, unknown>[] = (vacData.items as Record<string, unknown>[]) || [];
 
       if (vacancies.length === 0) {
         setCandidates([]);
+        setError('На HH.ru нет активных вакансий. Опубликуйте вакансию — отклики появятся здесь.');
         return;
       }
 
