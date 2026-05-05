@@ -1,6 +1,7 @@
 import json
 import os
 import urllib.request
+import urllib.error
 
 
 def handler(event: dict, context) -> dict:
@@ -62,8 +63,22 @@ def handler(event: dict, context) -> dict:
         }
 
     req = urllib.request.Request(url, headers=hh_headers)
-    with urllib.request.urlopen(req) as resp:
-        data = json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8', errors='ignore')
+        return {
+            'statusCode': e.code,
+            'headers': {**CORS, 'Content-Type': 'application/json'},
+            'body': json.dumps({'error': f'HH.ru error {e.code}', 'details': error_body}),
+        }
+    except Exception as e:
+        return {
+            'statusCode': 502,
+            'headers': {**CORS, 'Content-Type': 'application/json'},
+            'body': json.dumps({'error': str(e)}),
+        }
 
     return {
         'statusCode': 200,

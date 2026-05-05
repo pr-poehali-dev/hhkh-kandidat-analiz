@@ -34,16 +34,11 @@ function HHIntegration() {
     }
   }, []);
 
-  const handleSave = async () => {
+  const handleSave = () => {
     const t = inputValue.trim();
     if (!t) return;
-    setStatus('checking');
     setErrorMsg('');
     try {
-      const res = await fetch(`${HH_RESPONSES_URL}?resource=negotiations`, {
-        headers: { 'X-HH-Token': t },
-      });
-      if (!res.ok) throw new Error(`Неверный токен (${res.status})`);
       localStorage.setItem('hh_access_token', t);
       localStorage.setItem('hh_login', 'HH.ru работодатель');
       setHhLogin('HH.ru работодатель');
