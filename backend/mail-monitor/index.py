@@ -73,8 +73,9 @@ def handler(event: dict, context) -> dict:
     errors = []
 
     try:
-        # Подключаемся к Яндекс IMAP
+        # Подключаемся к Яндекс IMAP с таймаутом
         mail = imaplib.IMAP4_SSL('imap.yandex.ru', 993)
+        mail.socket().settimeout(10)
         mail.login(email_addr, app_password)
         mail.select('INBOX')
 
@@ -86,10 +87,14 @@ def handler(event: dict, context) -> dict:
             return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json'},
                     'body': json.dumps({'processed': 0, 'moved_to_test': 0, 'message': 'No new emails'})}
 
+        # Обрабатываем максимум 10 писем за один вызов
+        all_ids = msg_ids[0].split()
+        batch = all_ids[:10]
+
         conn = get_db()
         try:
             with conn.cursor() as cur:
-                for msg_id in msg_ids[0].split():
+                for msg_id in batch:
                     try:
                         _, msg_data = mail.fetch(msg_id, '(RFC822)')
                         msg = email.message_from_bytes(msg_data[0][1])
@@ -179,6 +184,7 @@ def handler(event: dict, context) -> dict:
         'body': json.dumps({
             'processed': processed,
             'moved_to_test': moved_to_test,
+            'remaining': max(0, len(all_ids) - len(batch)),
             'errors': errors,
         }),
     }
