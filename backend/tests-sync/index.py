@@ -215,24 +215,45 @@ def psytests_login():
 
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor())
 
-    login_page_req = urllib.request.Request(
-        'https://psytests.org/login.html',
-        headers={'User-Agent': 'Mozilla/5.0'}
-    )
-    opener.open(login_page_req, timeout=15)
+    # Сначала получаем главную страницу для cookies
+    for start_url in ['https://psytests.org/', 'https://psytests.org/index.html']:
+        try:
+            opener.open(urllib.request.Request(start_url, headers={'User-Agent': 'Mozilla/5.0'}), timeout=10)
+            break
+        except Exception:
+            continue
 
-    data = urllib.parse.urlencode({'email': login, 'pass': password}).encode()
-    login_req = urllib.request.Request(
+    # Пробуем разные endpoints для логина
+    login_endpoints = [
         'https://psytests.org/run/login',
-        data=data,
-        headers={
-            'User-Agent': 'Mozilla/5.0',
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Referer': 'https://psytests.org/login.html',
-        },
-        method='POST'
-    )
-    opener.open(login_req, timeout=15)
+        'https://psytests.org/api/login',
+        'https://psytests.org/login',
+    ]
+    data = urllib.parse.urlencode({'email': login, 'pass': password, 'password': password}).encode()
+
+    for endpoint in login_endpoints:
+        try:
+            login_req = urllib.request.Request(
+                endpoint,
+                data=data,
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Referer': 'https://psytests.org/',
+                    'Accept': 'text/html,application/json,*/*',
+                },
+                method='POST'
+            )
+            resp = opener.open(login_req, timeout=15)
+            print(f'Login endpoint {endpoint} status: {resp.status}')
+            break
+        except urllib.error.HTTPError as e:
+            print(f'Login endpoint {endpoint} error: {e.code}')
+            continue
+        except Exception as e:
+            print(f'Login endpoint {endpoint} exception: {e}')
+            continue
+
     return opener
 
 
@@ -426,6 +447,18 @@ def handler(event: dict, context) -> dict:
                 return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'candidate_id required'})}
             data = get_candidate_tests(conn, int(candidate_id))
             return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json'}, 'body': json.dumps(data, ensure_ascii=False, default=str)}
+
+        if action == 'debug_psytests':
+            try:
+                opener = psytests_login()
+                html = fetch_psytests_data(opener)
+                return {
+                    'statusCode': 200,
+                    'headers': {**CORS, 'Content-Type': 'application/json'},
+                    'body': json.dumps({'html_len': len(html), 'html_snippet': html[:2000]}, ensure_ascii=False)
+                }
+            except Exception as e:
+                return {'statusCode': 200, 'headers': CORS, 'body': json.dumps({'error': str(e)})}
 
         if action == 'sync':
             results = {'google_forms': 0, 'psytests': 0, 'errors': []}
