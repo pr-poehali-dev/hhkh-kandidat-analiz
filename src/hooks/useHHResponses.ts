@@ -31,7 +31,9 @@ const mapHHNegotiation = (item: Record<string, unknown>, index: number): Candida
   const expYears = Math.round(expMonths / 12);
 
   const vacancyObj = (item.vacancy as Record<string, unknown>) || {};
-  const position = (vacancyObj.name as string) || (resume.title as string) || 'Не указано';
+  // Позиция — всегда название вакансии на которую откликнулся, резюме-должность в resumeTitle
+  const position = (vacancyObj.name as string) || 'Не указано';
+  const resumeTitle = (resume.title as string) || '';
   const state = ((item.state as Record<string, unknown>)?.id as string) || 'response';
 
   return {
@@ -48,7 +50,7 @@ const mapHHNegotiation = (item: Record<string, unknown>, index: number): Candida
     experience: expYears,
     phone: phone as string,
     email,
-    tags: [],
+    tags: resumeTitle ? [resumeTitle] : [],
   };
 };
 
