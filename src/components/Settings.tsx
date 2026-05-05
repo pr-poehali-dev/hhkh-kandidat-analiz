@@ -1,7 +1,83 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Icon from '@/components/ui/icon';
 
 const HH_RESPONSES_URL = 'https://functions.poehali.dev/2a41e2d1-38ab-4c9b-aa98-6800a8333690';
+const TESTS_SYNC_URL = 'https://functions.poehali.dev/f02fbdeb-8e4c-41b9-bbbc-619f2b6dbc83';
+
+function PsytestsImport() {
+  const [status, setStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [result, setResult] = useState<{ imported: number; skipped: number; total: number } | null>(null);
+  const [errorMsg, setErrorMsg] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setStatus('uploading');
+    setErrorMsg('');
+    setResult(null);
+    try {
+      const bytes = await file.arrayBuffer();
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(bytes)));
+      const res = await fetch(`${TESTS_SYNC_URL}?action=upload_csv`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: base64,
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Ошибка загрузки');
+      setResult(data);
+      setStatus('success');
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Ошибка');
+      setStatus('error');
+    }
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  return (
+    <div className="border border-border rounded overflow-hidden">
+      <div className="p-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded flex items-center justify-center bg-blue-500/10">
+            <Icon name="FileSpreadsheet" size={14} className="text-blue-500" />
+          </div>
+          <div>
+            <div className="text-sm font-medium text-foreground">psytests.org — импорт результатов</div>
+            <div className="text-xs text-muted-foreground">Загрузите CSV-файл с результатами тестов Кеттела и Беннета</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {status === 'uploading' && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <Icon name="Loader2" size={11} className="animate-spin" /> Загрузка...
+            </span>
+          )}
+          {status === 'success' && result && (
+            <span className="text-xs stat-up flex items-center gap-1">
+              <Icon name="CheckCircle2" size={11} />
+              Импортировано: {result.imported}, пропущено: {result.skipped}
+            </span>
+          )}
+          {status === 'error' && (
+            <span className="text-xs text-destructive">{errorMsg}</span>
+          )}
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={status === 'uploading'}
+            className="text-xs px-2.5 py-1 rounded border border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50"
+          >
+            Загрузить CSV
+          </button>
+          <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFile} />
+        </div>
+      </div>
+      <div className="border-t border-border bg-muted/20 px-4 py-2 text-xs text-muted-foreground">
+        Как скачать: psytests.org → Данные респондентов → зелёная иконка экспорта (справа от фильтров)
+      </div>
+    </div>
+  );
+}
 
 const templates = [
   { id: 't1', name: 'Приглашение на собеседование', type: 'email', used: 24 },
@@ -255,6 +331,7 @@ export default function Settings() {
               </div>
               <div className="p-4 flex flex-col gap-3">
                 <HHIntegration />
+                <PsytestsImport />
                 {[
                   { name: 'Telegram Bot', desc: 'Уведомления и управление через Telegram', status: 'Не настроено', on: false, icon: 'MessageCircle' },
                   { name: 'Google Calendar', desc: 'Синхронизация собеседований с Google Calendar', status: 'Не настроено', on: false, icon: 'Calendar' },

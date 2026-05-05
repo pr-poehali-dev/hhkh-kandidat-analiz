@@ -1,3 +1,6 @@
+import base64
+import csv
+import io
 import json
 import os
 import re
@@ -395,6 +398,128 @@ def sync_psytests(conn, opener):
     return synced
 
 
+KETTELL_FACTORS = ['A','B','C','E','F','G','H','I','L','M','N','O','Q1','Q2','Q3','Q4','F1','F2','F3','F4','MD','FB']
+BENNETT_FACTORS = ['score']
+
+
+def parse_psytests_csv(raw_bytes):
+    """Парсит CSV файл с psytests.org (windows-1251 или utf-8)"""
+    for encoding in ('windows-1251', 'utf-8', 'utf-8-sig'):
+        try:
+            text = raw_bytes.decode(encoding)
+            break
+        except Exception:
+            text = None
+    if not text:
+        return []
+
+    reader = csv.reader(io.StringIO(text))
+    results = []
+    for row in reader:
+        if len(row) < 4:
+            continue
+        test_name = row[0].strip()
+        date_str = row[1].strip()
+        name = row[2].strip()
+        link = row[3].strip()
+
+        test_type = detect_test_type(test_name)
+
+        # Определяем факторы в зависимости от типа теста
+        score_start = 5  # после: название, дата, имя, ссылка, ответы
+        if len(row) > score_start + 1:
+            gender = row[score_start].strip() if len(row) > score_start else ''
+            factor_values = row[score_start + 1:] if test_type == 'kettell' else row[score_start:]
+        else:
+            gender = ''
+            factor_values = []
+
+        factors = {}
+        if test_type == 'kettell':
+            for i, f in enumerate(KETTELL_FACTORS):
+                factors[f] = factor_values[i].strip() if i < len(factor_values) else ''
+        elif test_type == 'bennett':
+            factors['score'] = factor_values[0].strip() if factor_values else ''
+
+        raw_score = factors.get('score', '') or (factors.get('B', '') if test_type == 'kettell' else '')
+
+        results.append({
+            'test_name': test_name,
+            'test_type': test_type,
+            'date': date_str,
+            'name': name,
+            'link': link,
+            'gender': gender,
+            'factors': factors,
+            'raw_score': raw_score,
+        })
+    return results
+
+
+def import_psytests_csv(conn, rows):
+    """Сохраняет распарсенные строки CSV в БД"""
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute(f'SELECT id, first_name, last_name, middle_name FROM {SCHEMA}.candidates')
+    candidates = cur.fetchall()
+
+    imported = 0
+    skipped = 0
+    for row in rows:
+        # Дедупликация по имени + тесту + дате
+        cur.execute(f'''
+            SELECT id FROM {SCHEMA}.test_results
+            WHERE test_type = %s AND result_data->>'psytests_name' = %s AND result_data->>'date' = %s
+            LIMIT 1
+        ''', (row['test_type'], row['name'], row['date']))
+        if cur.fetchone():
+            skipped += 1
+            continue
+
+        # Матчинг кандидата по ФИО
+        matched_candidate = None
+        best_score = 0
+        for c in candidates:
+            full_name = f"{c['last_name']} {c['first_name']} {c['middle_name'] or ''}".strip()
+            score = name_similarity(row['name'], full_name)
+            if score > best_score and score >= 0.5:
+                best_score = score
+                matched_candidate = c
+
+        candidate_id = matched_candidate['id'] if matched_candidate else None
+        app_id = None
+        if candidate_id:
+            cur.execute(f'''
+                SELECT id FROM {SCHEMA}.applications
+                WHERE candidate_id = %s ORDER BY created_at DESC LIMIT 1
+            ''', (candidate_id,))
+            app_row = cur.fetchone()
+            if app_row:
+                app_id = app_row['id']
+
+        result_data = {
+            'psytests_name': row['name'],
+            'psytests_link': row['link'],
+            'date': row['date'],
+            'gender': row['gender'],
+            'factors': row['factors'],
+            'score_raw': row['raw_score'],
+        }
+
+        cur.execute(f'''
+            INSERT INTO {SCHEMA}.test_results
+            (candidate_id, application_id, test_type, source_name, raw_score, result_data, matched_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ''', (
+            candidate_id, app_id, row['test_type'], row['test_name'],
+            row['raw_score'], json.dumps(result_data, ensure_ascii=False),
+            'name' if matched_candidate else None
+        ))
+        imported += 1
+
+    conn.commit()
+    return imported, skipped
+
+
 def get_candidate_tests(conn, candidate_id):
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
@@ -447,6 +572,25 @@ def handler(event: dict, context) -> dict:
                 return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'candidate_id required'})}
             data = get_candidate_tests(conn, int(candidate_id))
             return {'statusCode': 200, 'headers': {**CORS, 'Content-Type': 'application/json'}, 'body': json.dumps(data, ensure_ascii=False, default=str)}
+
+        if action == 'upload_csv':
+            body_raw = event.get('body') or ''
+            # Фронтенд отправляет base64 строку
+            try:
+                csv_bytes = base64.b64decode(body_raw)
+            except Exception:
+                csv_bytes = body_raw.encode('utf-8')
+
+            rows = parse_psytests_csv(csv_bytes)
+            if not rows:
+                return {'statusCode': 400, 'headers': CORS, 'body': json.dumps({'error': 'Не удалось распарсить CSV. Проверь формат файла.'})}
+
+            imported, skipped = import_psytests_csv(conn, rows)
+            return {
+                'statusCode': 200,
+                'headers': {**CORS, 'Content-Type': 'application/json'},
+                'body': json.dumps({'ok': True, 'imported': imported, 'skipped': skipped, 'total': len(rows)}, ensure_ascii=False)
+            }
 
         if action == 'debug_eurl':
             try:
