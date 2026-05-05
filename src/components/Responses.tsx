@@ -139,10 +139,10 @@ export default function Responses({ onSelectCandidate }: { onSelectCandidate: (i
           </button>
         </div>
 
-        {loading && hhCandidates.length === 0 ? (
+        {loading && allCandidates.length === 0 ? (
           <div className="p-8 flex flex-col items-center gap-3 text-muted-foreground">
             <Icon name="Loader2" size={24} className="animate-spin" />
-            <span className="text-sm">Загружаем отклики с HH.ru...</span>
+            <span className="text-sm">Загружаем данные...</span>
           </div>
         ) : filtered.length === 0 ? (
           <div className="p-8 flex flex-col items-center gap-2 text-muted-foreground">
