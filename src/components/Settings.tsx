@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Icon from '@/components/ui/icon';
 
-const HH_AUTH_URL = 'https://functions.poehali.dev/9500c236-1e3e-4291-99b9-5610c7718359';
+const HH_RESPONSES_URL = 'https://functions.poehali.dev/2a41e2d1-38ab-4c9b-aa98-6800a8333690';
 
 const templates = [
   { id: 't1', name: 'Приглашение на собеседование', type: 'email', used: 24 },
@@ -19,117 +19,123 @@ const criteria = [
 ];
 
 function HHIntegration() {
-  const [status, setStatus] = useState<'idle' | 'loading' | 'connected' | 'error'>('idle');
+  const [inputValue, setInputValue] = useState('');
+  const [status, setStatus] = useState<'idle' | 'checking' | 'connected' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
-  const [hhUser, setHhUser] = useState<{ first_name?: string; last_name?: string; email?: string } | null>(null);
+  const [showInput, setShowInput] = useState(false);
+  const [hhLogin, setHhLogin] = useState('');
 
   useEffect(() => {
-    const token = localStorage.getItem('hh_access_token');
-    if (token) {
+    const saved = localStorage.getItem('hh_access_token');
+    if (saved) {
+      setToken(saved);
       setStatus('connected');
-      const saved = localStorage.getItem('hh_user');
-      if (saved) setHhUser(JSON.parse(saved));
-    }
-
-    // Обработка возврата с HH.ru после авторизации
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-    if (code) {
-      window.history.replaceState({}, '', window.location.pathname);
-      exchangeCode(code);
+      setHhLogin(localStorage.getItem('hh_login') || '');
     }
   }, []);
 
-  const exchangeCode = async (code: string) => {
-    setStatus('loading');
+  const handleSave = async () => {
+    const t = inputValue.trim();
+    if (!t) return;
+    setStatus('checking');
+    setErrorMsg('');
     try {
-      const redirect_uri = window.location.origin + window.location.pathname;
-      const res = await fetch(HH_AUTH_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, redirect_uri }),
+      const res = await fetch(`${HH_RESPONSES_URL}?resource=me`, {
+        headers: { 'X-HH-Token': t },
       });
+      if (!res.ok) throw new Error(`Неверный токен (${res.status})`);
       const data = await res.json();
-      if (!data.access_token) throw new Error(data.error || 'Ошибка авторизации');
-      localStorage.setItem('hh_access_token', data.access_token);
-      if (data.refresh_token) localStorage.setItem('hh_refresh_token', data.refresh_token);
+      const login = data.email || data.first_name || 'Аккаунт подключён';
+      localStorage.setItem('hh_access_token', t);
+      localStorage.setItem('hh_login', login);
+      setHhLogin(login);
       setStatus('connected');
+      setShowInput(false);
+      setInputValue('');
     } catch (e) {
       setStatus('error');
-      setErrorMsg(e instanceof Error ? e.message : 'Ошибка авторизации');
-    }
-  };
-
-  const handleConnect = async () => {
-    setStatus('loading');
-    try {
-      const redirect_uri = window.location.origin + window.location.pathname;
-      const res = await fetch(`${HH_AUTH_URL}?redirect_uri=${encodeURIComponent(redirect_uri)}`);
-      const data = await res.json();
-      window.location.href = data.auth_url;
-    } catch {
-      setStatus('error');
-      setErrorMsg('Не удалось получить ссылку авторизации');
+      setErrorMsg(e instanceof Error ? e.message : 'Ошибка проверки токена');
     }
   };
 
   const handleDisconnect = () => {
     localStorage.removeItem('hh_access_token');
-    localStorage.removeItem('hh_refresh_token');
-    localStorage.removeItem('hh_user');
-    setHhUser(null);
+    localStorage.removeItem('hh_login');
+    setHhLogin('');
     setStatus('idle');
+    setShowInput(false);
+    setInputValue('');
   };
 
   const isConnected = status === 'connected';
 
   return (
-    <div className="border border-border rounded p-3 flex items-center justify-between">
-      <div className="flex items-center gap-3">
-        <div className={`w-8 h-8 rounded flex items-center justify-center ${isConnected ? 'bg-green-500/10' : 'bg-muted'}`}>
-          <Icon name="Link" size={14} className={isConnected ? 'text-green-500' : 'text-foreground'} />
-        </div>
-        <div>
-          <div className="text-sm font-medium text-foreground">HH.ru</div>
-          <div className="text-xs text-muted-foreground">
-            {isConnected
-              ? hhUser ? `${hhUser.first_name ?? ''} ${hhUser.last_name ?? ''}`.trim() || hhUser.email || 'Подключено'
-              : 'Аккаунт подключён'
-              : 'Автоматический импорт откликов с HeadHunter'}
+    <div className="border border-border rounded overflow-hidden">
+      <div className="p-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className={`w-8 h-8 rounded flex items-center justify-center ${isConnected ? 'bg-green-500/10' : 'bg-muted'}`}>
+            <Icon name="Link" size={14} className={isConnected ? 'text-green-500' : 'text-foreground'} />
           </div>
-          {status === 'error' && <div className="text-xs text-destructive mt-0.5">{errorMsg}</div>}
+          <div>
+            <div className="text-sm font-medium text-foreground">HH.ru</div>
+            <div className="text-xs text-muted-foreground">
+              {isConnected ? hhLogin || 'Аккаунт подключён' : 'Автоматический импорт откликов с HeadHunter'}
+            </div>
+            {status === 'error' && <div className="text-xs text-destructive mt-0.5">{errorMsg}</div>}
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {isConnected && (
+            <span className="text-xs stat-up flex items-center gap-1">
+              <Icon name="CheckCircle2" size={11} />
+              Подключено
+            </span>
+          )}
+          {status === 'checking' && (
+            <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <Icon name="Loader2" size={11} className="animate-spin" />
+              Проверка...
+            </span>
+          )}
+          {isConnected ? (
+            <button onClick={handleDisconnect} className="text-xs px-2.5 py-1 rounded border border-border text-muted-foreground hover:text-destructive hover:border-destructive transition-colors">
+              Отключить
+            </button>
+          ) : (
+            <button onClick={() => setShowInput(!showInput)} className="text-xs px-2.5 py-1 rounded border border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-colors">
+              Подключить
+            </button>
+          )}
         </div>
       </div>
-      <div className="flex items-center gap-3">
-        {isConnected && (
-          <span className="text-xs stat-up flex items-center gap-1">
-            <Icon name="CheckCircle2" size={11} />
-            Подключено
-          </span>
-        )}
-        {status === 'loading' && (
-          <span className="text-xs text-muted-foreground flex items-center gap-1">
-            <Icon name="Loader2" size={11} className="animate-spin" />
-            Подключение...
-          </span>
-        )}
-        {isConnected ? (
-          <button
-            onClick={handleDisconnect}
-            className="text-xs px-2.5 py-1 rounded border border-border text-muted-foreground hover:text-destructive hover:border-destructive transition-colors"
-          >
-            Отключить
-          </button>
-        ) : (
-          <button
-            onClick={handleConnect}
-            disabled={status === 'loading'}
-            className="text-xs px-2.5 py-1 rounded border border-primary text-primary hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50"
-          >
-            Подключить
-          </button>
-        )}
-      </div>
+
+      {/* Инструкция + ввод токена */}
+      {showInput && !isConnected && (
+        <div className="border-t border-border bg-muted/30 p-4 flex flex-col gap-3">
+          <div className="text-xs text-foreground font-medium">Как получить токен:</div>
+          <ol className="flex flex-col gap-1.5 text-xs text-muted-foreground list-decimal list-inside">
+            <li>Откройте <a href="https://dev.hh.ru/admin" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">dev.hh.ru/admin</a> и войдите как работодатель</li>
+            <li>Перейдите в своё приложение <strong className="text-foreground">HEVSR</strong></li>
+            <li>В разделе «Тестирование» нажмите <strong className="text-foreground">«Получить токен»</strong></li>
+            <li>Скопируйте значение поля <strong className="text-foreground">access_token</strong> и вставьте ниже</li>
+          </ol>
+          <div className="flex gap-2">
+            <input
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder="Вставьте access_token..."
+              className="flex-1 bg-background border border-border rounded px-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary font-mono"
+            />
+            <button
+              onClick={handleSave}
+              disabled={!inputValue.trim() || status === 'checking'}
+              className="text-xs px-3 py-1.5 rounded bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              Сохранить
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
