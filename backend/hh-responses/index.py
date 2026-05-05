@@ -147,12 +147,15 @@ def handler(event: dict, context) -> dict:
                 try:
                     items = future.result()
                     for item in items:
-                        resume_id = item.get('resume_id') or item.get('id')
-                        if not resume_id:
+                        # Ключ дедупликации: ID отклика (числовой, уникален на вакансию)
+                        # Один человек в одной вакансии = один отклик = один ID
+                        item_id = item.get('id')
+                        if not item_id:
                             continue
-                        existing = resume_map.get(resume_id)
+                        existing = resume_map.get(item_id)
+                        # Берём запись с более поздним updated_at (актуальный статус)
                         if not existing or item.get('updated_at', '') > existing.get('updated_at', ''):
-                            resume_map[resume_id] = item
+                            resume_map[item_id] = item
                 except Exception:
                     pass
 
